@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "base_url": null,
+  "base_url": "https://huggingface.co/datasets/kbench/kbench-assets/resolve/main",
   "bundles": {
     "mini": {
       "file": "kbench-assets-mini.tar.gz",
-      "sha256": "459a8e3c1a55bfeb416b7381382a709a3808d730c9e651ea4f417ab0734354a5",
+      "sha256": "cd935a649429fda490e6ee70a8c8b44f0468e33ccfc9f2c3096d3183ab2c293f",
       "size_bytes": 378276,
       "n_files": 6,
       "dest": "results",
@@ -12,7 +12,7 @@
     },
     "full": {
       "file": "kbench-assets-full.tar.gz",
-      "sha256": "3c077a5dae513c0ce07f6bf310a038638505c06aa3123dc1f8fc3ec2be4a2a94",
+      "sha256": "d46bc2ffde1a0210e49bb7a4d34c5fea2161521187f44f3bafe889b46623c37d",
       "size_bytes": 2687325,
       "n_files": 24,
       "dest": "results",
