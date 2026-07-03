@@ -7,10 +7,9 @@ elicitation, K-Bench instruments a ReAct agent with **six observable channels**
 across **three memory substrates** (parametric, context, retrieval) and scores an
 **adaptive attacker** who succeeds if the secret is recoverable from *any* channel.
 
-> **Anonymized artifact for peer review.** This repository contains code, the
-> synthetic PII corpus, and one-command reproduction of the paper's main tables.
-> All author/institution identifiers have been removed; the corpus is fully synthetic
-> (see `docs/DATASHEET.md`).
+> **Companion code for the K-Bench paper.** The harness, the synthetic PII corpus, and
+> one-command reproduction of the paper's main tables. The corpus is fully synthetic
+> (Faker-generated, no real personal data; see `docs/DATASHEET.md`).
 
 ## Why K-Bench
 
