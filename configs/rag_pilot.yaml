@@ -1,0 +1,12 @@
+# Production-scale Wiki RAG index for HPC GPU run
+snapshot: 20231101.en
+n_articles: 500000      # ~1.5–2.5M passages after chunking
+max_chars: 1200         # ~256-token chunks for English
+shard_size: 50000       # 30–60 shards; per-shard checkpointing for resume
+
+embed_model: BAAI/bge-base-en-v1.5
+batch_size: 128
+device: cuda
+
+n_clusters: 1024        # FAISS IVF; ~sqrt(N_passages)
+output_dir: data/wiki_index

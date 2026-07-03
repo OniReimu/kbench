@@ -1,0 +1,36 @@
+# Qwen2.5-7B compatibility env — pinned to versions contemporary with the model
+# (Qwen2.5 released 2024-09; these are the Oct-Dec 2024 era releases).
+# Maintained as a separate venv — do not install into the main project venv.
+#
+# Strategy: pin the bug-prone libs (transformers/peft/torch/accelerate) to
+# Qwen2.5-contemporary versions, leave loose pins on the rest. Then
+# `uv pip install -e . --no-deps` to register the chcons package.
+
+# Bug-prone — strict pins
+#   - transformers 5.x: Qwen2.5 NaN gradient at an early step (rejected).
+#   - transformers 4.46.x: num_items_in_batch CPU/GPU device mismatch
+#     (HF issue #35113, fixed in 4.47.0+).
+#   - transformers 4.47.1: newest 4.47 patch with the fix, still Qwen2.5-era.
+torch==2.4.1
+transformers==4.47.1
+peft==0.14.0
+accelerate==1.2.1
+datasets==3.2.0
+tokenizers==0.21.0
+safetensors==0.4.5
+huggingface-hub==0.26.5
+
+# Inference essentials
+sentencepiece>=0.2
+protobuf>=5
+numpy<2.0
+scipy>=1.11
+tqdm
+
+# chcons project deps (needed or the chcons package fails to import)
+scikit-learn>=1.5
+pyyaml
+faker>=30
+faiss-cpu
+sentence-transformers>=3
+wandb

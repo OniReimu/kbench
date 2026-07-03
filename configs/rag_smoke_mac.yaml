@@ -1,0 +1,12 @@
+# Mac smoke test: tiny subset, BGE-small, CPU. Verifies pipeline only.
+snapshot: 20231101.en
+n_articles: 50
+max_chars: 1200
+shard_size: 25
+
+embed_model: BAAI/bge-small-en-v1.5
+batch_size: 32
+device: cpu
+
+n_clusters: 8
+output_dir: data/wiki_index_smoke

@@ -1,0 +1,45 @@
+# K-Bench CPU / no-GPU image. Runs the deployment-facing paths on a laptop -- no CUDA,
+# no `--gpus`: `kbench eval --api-model` (C / R-text / R-struct substrates, served via
+# OpenRouter) and `kbench score`. The local `--model` path and the full paper reproduction
+# stay on the GPU `Dockerfile`.
+#
+# Build:  docker build -f Dockerfile.cpu -t kbench:cpu .
+#
+# Score a candidate you ran yourself (offline, no API key):
+#   docker run --rm -v "$PWD/results:/workspace/kbench/results" kbench:cpu \
+#     score --cells /workspace/kbench/results --name MyMethod
+#
+# Fetch the `none` baseline, then eval an API-served model (needs an OpenRouter key and,
+# for fetch, the asset host from docs/LEADERBOARD.md):
+#   docker run --rm -e KBENCH_ASSETS_URL -v "$PWD/results:/workspace/kbench/results" \
+#     kbench:cpu fetch-assets --full
+#   docker run --rm -e OPENROUTER_API_KEY -v "$PWD/results:/workspace/kbench/results" \
+#     kbench:cpu eval --api-model openai/gpt-4o-mini --substrate C,R-text,R-struct --name MyMethod
+
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1
+RUN apt-get update && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
+
+# uv for fast, reproducible installs (from the official uv image)
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+WORKDIR /workspace/kbench
+
+# --- CPU dependency layer (Docker-cached unless the pin file changes) ---
+# `--torch-backend cpu` makes uv pull the CPU torch wheel (no CUDA). This deliberately
+# does NOT `uv sync`: pyproject's GPU-only `infer`/vllm extra is irrelevant to this image,
+# and cpu_pinned_requirements.txt is the tested CPU stack.
+COPY pyproject.toml cpu_pinned_requirements.txt ./
+RUN uv venv --python 3.11 /opt/venv \
+    && VIRTUAL_ENV=/opt/venv uv pip install --torch-backend cpu -r cpu_pinned_requirements.txt
+ENV VIRTUAL_ENV=/opt/venv \
+    PATH=/opt/venv/bin:/workspace/kbench/bin:$PATH
+
+# --- project code + the chcons package (deps already installed above) ---
+COPY . .
+RUN uv pip install -e . --no-deps
+
+ENTRYPOINT ["kbench"]
+CMD ["--help"]

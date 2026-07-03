@@ -1,0 +1,10 @@
+{
+  "snapshot": "20231101.en",
+  "n_articles": 50,
+  "embed_model": "BAAI/bge-small-en-v1.5",
+  "n_clusters": 8,
+  "n_passages": 1504,
+  "n_shards_embedded": 61,
+  "index_built": true,
+  "completed_at": "2026-07-03 17:23:58"
+}

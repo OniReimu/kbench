@@ -1,0 +1,8 @@
+{
+  "hash": "b93139aa9996ef5c",
+  "snapshot": "20231101.en",
+  "n_articles": 50,
+  "max_chars": 1200,
+  "embed_model": "BAAI/bge-small-en-v1.5",
+  "shard_size": 25
+}

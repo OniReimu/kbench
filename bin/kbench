@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Thin launcher so `kbench <cmd> ...` works from anywhere. Resolves the repo root from
+# this script's location and runs scripts/kbench.py. If the current interpreter already
+# has the deps (the Docker image installs them into a venv on PATH), run it directly --
+# that avoids `uv run` re-resolving the project inside the container. Otherwise fall back
+# to `uv run` for local dev.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# Probe the project package + a heavy dep together: if this interpreter can import both
+# (the Docker venv has chcons via `uv pip install -e .`), run directly -- eval reuses this
+# same interpreter for 02_baseline_leakage.py, which needs `chcons`. Otherwise fall back to
+# `uv run` so local dev without an editable install still works.
+if python -c "import chcons, numpy" >/dev/null 2>&1; then
+  exec python "$ROOT/scripts/kbench.py" "$@"
+fi
+exec uv run python "$ROOT/scripts/kbench.py" "$@"

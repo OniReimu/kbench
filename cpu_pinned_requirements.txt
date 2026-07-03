@@ -1,0 +1,25 @@
+# CPU-only stack for the no-GPU image (Dockerfile.cpu): `kbench eval --api-model`
+# (C / R-text / R-struct substrates, served via OpenRouter) + `kbench score`.
+# Install with uv's CPU torch backend so no CUDA wheels are pulled:
+#   uv pip install --torch-backend cpu -r cpu_pinned_requirements.txt
+#
+# The API ReAct path is itself torch-free (chcons/api_agent.py); torch is here only
+# because sentence-transformers runs the BGE retriever (R substrates) on CPU. Excludes
+# vllm / CUDA and the local-weights training libs (peft / accelerate / wandb / datasets)
+# -- those stay in the GPU reproduction image (Dockerfile).
+
+torch==2.4.1
+transformers==4.51.3
+tokenizers==0.21.1
+safetensors==0.5.3
+huggingface-hub==0.30.2
+sentence-transformers>=3
+faiss-cpu>=1.14
+sentencepiece>=0.2
+numpy<2.0
+scipy>=1.11
+scikit-learn>=1.5
+pyyaml
+faker>=30
+requests>=2.32
+rouge-score>=0.1.2,<0.2

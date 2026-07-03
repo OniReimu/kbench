@@ -1,0 +1,26 @@
+# Cross-model pinned env — transformers 4.51.x (last 4.x stable with Gemma-3 +
+# Mistral support). Newer transformers (5.x) caused gradient instability on
+# these two models during LoRA injection; 4.51.3 is the tested stack.
+# Qwen2.5 uses the separate qwen_pinned_requirements.txt (transformers 4.47.1).
+
+torch==2.4.1
+transformers==4.51.3
+peft==0.15.2
+accelerate==1.6.0
+datasets==3.5.0
+tokenizers==0.21.1
+safetensors==0.5.3
+huggingface-hub==0.30.2
+
+sentencepiece>=0.2
+protobuf>=5
+numpy<2.0
+scipy>=1.11
+tqdm
+
+scikit-learn>=1.5
+pyyaml
+faker>=30
+faiss-cpu
+sentence-transformers>=3
+wandb

@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "base_url": null,
+  "bundles": {
+    "mini": {
+      "file": "kbench-assets-mini.tar.gz",
+      "sha256": "459a8e3c1a55bfeb416b7381382a709a3808d730c9e651ea4f417ab0734354a5",
+      "size_bytes": 378276,
+      "n_files": 6,
+      "dest": "results",
+      "contents": "substrate-P `none` baseline cells (score a P candidate)"
+    },
+    "full": {
+      "file": "kbench-assets-full.tar.gz",
+      "sha256": "3c077a5dae513c0ce07f6bf310a038638505c06aa3123dc1f8fc3ec2be4a2a94",
+      "size_bytes": 2687325,
+      "n_files": 24,
+      "dest": "results",
+      "contents": "all-substrate `none` baseline cells (score any candidate)"
+    }
+  },
+  "note": "kbench fetch-assets downloads <base_url>/<bundle.file>, verifies sha256, and unpacks into <release>/<dest>. Set base_url via --base-url / $KBENCH_ASSETS_URL at fetch time, and upload the tarballs from make-assets --out to that host."
+}
