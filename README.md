@@ -1,11 +1,12 @@
-# K-Bench: A Multi-Channel, Substrate-Aware, Adaptive-Attacker Benchmark for LLM Unlearning in Agentic Deployments
+# K-Bench: A Benchmark for LLM Unlearning in Agentic Deployments
 
 K-Bench evaluates whether an "unlearned" language model still leaks the target
-information **when deployed as a tool-using agent**. Unlike single-output-channel
-benchmarks (TOFU, MUSE, WMDP) that probe only the model weights by direct
-elicitation, K-Bench instruments a ReAct agent with **six observable channels**
-across **three memory substrates** (parametric, context, retrieval) and scores an
-**adaptive attacker** who succeeds if the secret is recoverable from *any* channel.
+information **when deployed as a tool-using agent**. Benchmarks such as TOFU, MUSE,
+WMDP, and LUME certify forgetting by reading the model's **final answer**; K-Bench
+shows this is a deployment-time illusion. It instruments a ReAct agent with **six
+observable channels** across **three memory substrates** (parametric, context,
+retrieval) and scores an **adaptive attacker** who succeeds if the secret is
+recoverable from *any* channel.
 
 > **Companion code for the K-Bench paper.** The harness, the synthetic PII corpus, and
 > one-command reproduction of the paper's main tables. The corpus is fully synthetic
