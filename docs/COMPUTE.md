@@ -40,12 +40,12 @@ isolated environment.
 
 ## Cross-model block (`reproduce.sh substrate`)
 
-Only the Llama rows in the substrate block are emitted under the `v21B_` naming
+Only the Llama rows in the substrate block are emitted under the `v77app_` naming
 that `scripts/09_k_verdict_v2.py` discovers (its `FILE_RE` / aggregation are
 single-model by design — the nested substrate/method/seed dict has no model
 axis). The cross-model rows (Qwen / Mistral) are scored under separate per-family
 prefixes and aggregated independently per family; the `substrate` target prints the
-commands rather than pooling them into the v21B verdict. Run Mistral in its pinned
+commands rather than pooling them into the v77app verdict. Run Mistral in its pinned
 venv above and Qwen in the main environment.
 
 ## Wall-clock guidance for `reproduce.sh`

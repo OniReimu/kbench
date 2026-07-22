@@ -1,5 +1,5 @@
 """Cross-model K-Score: same metric as kscore.py but baseline = none_<arch>.
-Usage: kscore_crossmodel.py <arch=mistral|qwen> <prefix=v72app> [methods_csv]"""
+Usage: kscore_crossmodel.py <arch=mistral|qwen> <prefix=v77app> [methods_csv]"""
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 from kscore import load, cell_metrics, SUBSTRATE_BROKEN_OR, SUBSTRATE_BROKEN_COH, SEEDS
@@ -15,7 +15,7 @@ def cell(method, split, prefix):
 
 def main():
     arch = sys.argv[1]
-    prefix = sys.argv[2] if len(sys.argv) > 2 else "v72app"
+    prefix = sys.argv[2] if len(sys.argv) > 2 else "v77app"
     methods = sys.argv[3].split(",") if len(sys.argv) > 3 else ["SimNPO","SatImp","WGA","UNDIAL","SOUL"]
     bf = cell("none_%s" % arch, "forget", prefix)
     br = cell("none_%s" % arch, "retain", prefix)

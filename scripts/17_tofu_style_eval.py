@@ -11,7 +11,7 @@ For each unlearned checkpoint (GA, GD, NPO, NPOKL, IDK):
      - ROUGE-L(generated, ground_truth) → forget_quality = 1 - ROUGE-L
      - Token-level probability of ground truth answer
      - Truth ratio (prob(true_answer) / prob(random_wrong_answer))
-  4. Output per-entity JSONL for later comparison with K-Bench v50 results.
+  4. Output per-entity JSONL for later comparison with the K-Bench agentic CER results.
 
 Resume-safe: skips already-completed (model, query_id) pairs.
 """
@@ -83,9 +83,9 @@ def main():
     args = parser.parse_args()
 
     if args.out_jsonl is None:
-        args.out_jsonl = Path(f"results/v51_tofu_{args.model_name}_{args.query_subset}.jsonl")
+        args.out_jsonl = Path(f"results/tofu_{args.model_name}_{args.query_subset}.jsonl")
     if args.out_summary is None:
-        args.out_summary = Path(f"results/v51_tofu_{args.model_name}_{args.query_subset}.json")
+        args.out_summary = Path(f"results/tofu_{args.model_name}_{args.query_subset}.json")
 
     args.out_jsonl.parent.mkdir(parents=True, exist_ok=True)
 

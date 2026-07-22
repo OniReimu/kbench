@@ -36,7 +36,7 @@ channel observability outside Z_answer/Z_summary.
 - non-P substrate ⇒ `effective_lora_path is None` OR (with `--ablation-load-lora-d`)
   `effective_lora_path == lora_d_path`
 
-**Cells affected.** All v21B non-P cells in the reported matrix run under
+**Cells affected.** All non-P cells in the reported matrix run under
 vanilla (90 cells = 30 C + 30 R-text + 30 R-struct). Comparison against the
 spec-strict LoRA-D non-P regime is preserved as the appendix LoRA-presence
 ablation (not yet executed).

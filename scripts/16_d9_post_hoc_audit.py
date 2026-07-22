@@ -4,8 +4,8 @@ Runs over all completed result cells (`results/*.json` + `results/*.jsonl`) and
 verifies post-hoc:
   - Cell coverage (no orphan partials)
   - Provenance invariants (audit_version, canonical_facts_sha16, splits)
-  - LEACE post-fix verification (any v26/v21D LEACE cells still in publishable
-    namespace get a warning flag — should be replaced by v27/v28/v30 post-fix)
+  - LEACE verification: the canonical activation-probe set is v54 (Llama, 3 seeds,
+    all substrates); any pre-v54 LEACE cell in the publishable namespace is flagged
   - n_queries × n_seeds consistency
   - Per-cell sha-stable hash of inputs (for reproducibility check)
 
@@ -75,9 +75,8 @@ def compute_jsonl_sha16(p: Path) -> str:
 
 
 # Cells that should be considered deprecated due to known LEACE adapter bug
-# (pre-fix fit/apply mismatch). v26 Mistral LEACE + v21D Llama R-struct
-# LEACE are pre-fix. Post-fix: v27 (Mistral smoke), v28 (Llama R-struct), v30 (n=500).
-DEPRECATED_LEACE_NAMESPACES = {"v26", "v21D"}
+# (pre-fix fit/apply mismatch); superseded by the canonical v54 activation-probe set.
+DEPRECATED_LEACE_NAMESPACES = {"v26", "v21D", "v27", "v28", "v30", "v31", "v32", "v33", "v35"}  # all superseded by v54
 
 
 def audit_results_dir(results_dir: Path, strict: bool = False) -> tuple[list, list]:
@@ -128,7 +127,7 @@ def audit_results_dir(results_dir: Path, strict: bool = False) -> tuple[list, li
         # Deprecated LEACE flag
         if cell["method"] == "leace" and cell["version"] in DEPRECATED_LEACE_NAMESPACES:
             warnings.append(
-                f"DEPRECATED LEACE pre-fix: {name} (use v27/v28/v30 post-fix instead)"
+                f"DEPRECATED LEACE pre-fix: {name} (use the canonical v54 activation-probe set instead)"
             )
 
         # Provenance: check audit_version + canonical_facts_sha16 if present

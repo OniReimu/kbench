@@ -4,17 +4,17 @@
   "bundles": {
     "mini": {
       "file": "kbench-assets-mini.tar.gz",
-      "sha256": "cd935a649429fda490e6ee70a8c8b44f0468e33ccfc9f2c3096d3183ab2c293f",
-      "size_bytes": 378276,
+      "sha256": "484d775089b955a484a5f690a12409d601e616e180407cfdcb4abb391cc6a969",
+      "size_bytes": 385496,
       "n_files": 6,
       "dest": "results",
       "contents": "substrate-P `none` baseline cells (score a P candidate)"
     },
     "full": {
       "file": "kbench-assets-full.tar.gz",
-      "sha256": "d46bc2ffde1a0210e49bb7a4d34c5fea2161521187f44f3bafe889b46623c37d",
-      "size_bytes": 2687325,
-      "n_files": 24,
+      "sha256": "8073101ceb236e2f968515ea0351add7021b2c148a45aeae0007612ed52ebcf8",
+      "size_bytes": 3679287,
+      "n_files": 36,
       "dest": "results",
       "contents": "all-substrate `none` baseline cells (score any candidate)"
     }

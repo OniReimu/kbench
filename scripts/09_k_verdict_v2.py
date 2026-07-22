@@ -1,6 +1,6 @@
 """K-Bench v2.1 verdict — full spec §4 metric stack.
 
-Reads results/v21B_<substrate>_<method>_<subset>_seed<s>.jsonl files and computes:
+Reads results/v77app_<substrate>_<method>_<subset>_seed<s>.jsonl files and computes:
 - per-channel CER + bootstrap 95% CI
 - OR(all) per cell with halt-gating
 - topology vector (normalized channel share) per cell
@@ -44,7 +44,7 @@ BASELINE_METHOD = "none"
 SEEDS = (0, 137, 271)
 
 FILE_RE = re.compile(
-    r"^v21B_(?P<substrate>P|C|Rstruct|Rtext)_(?P<method>\w+?)_(?P<subset>forget|retain)_seed(?P<seed>\d+)\.jsonl$"
+    r"^v77app_(?P<substrate>P|C|R-struct|R-text)_(?P<method>\w+?)_(?P<subset>forget|retain)_seed(?P<seed>\d+)\.jsonl$"
 )
 
 
@@ -226,16 +226,16 @@ def paired_mcnemar(base: dict[str, dict], intervention: dict[str, dict],
 
 
 def discover_cells(results_dir: Path) -> dict:
-    """Discover all v21B cells. Returns nested dict[substrate][method][subset][seed] = {path,cell}."""
+    """Discover all v77app cells. Returns nested dict[substrate][method][subset][seed] = {path,cell}."""
     cells: dict = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
-    for jsonl in sorted(results_dir.glob("v21B_*.jsonl")):
+    for jsonl in sorted(results_dir.glob("v77app_*.jsonl")):
         m = FILE_RE.match(jsonl.name)
         if not m:
             continue
         if m["method"] == "ablation":
             continue  # ablation cells handled separately (different schema)
-        # Ablation track uses "v21B_ablation_<substrate>_..." which won't match
-        # since FILE_RE expects substrate immediately after v21B_. Defensive.
+        # Ablation track uses "v77app_ablation_<substrate>_..." which won't match
+        # since FILE_RE expects substrate immediately after v77app_. Defensive.
         sub = m["substrate"]
         method = m["method"]
         subset = m["subset"]

@@ -148,9 +148,9 @@ def run_score(args):
 # into results/. Stdlib only, so both run in the slim/score env (no torch).
 # ------------------------------------------------------------------------------------
 ASSET_TIERS = {
-    "mini": {"dest": "results", "globs": ["v21B_P_none_*_seed*.jsonl"],
+    "mini": {"dest": "results", "globs": ["v77app_P_none_forget_seed*.jsonl", "v77app_P_none_retain_seed*.jsonl"],
              "contents": "substrate-P `none` baseline cells (score a P candidate)"},
-    "full": {"dest": "results", "globs": ["v21B_*_none_*_seed*.jsonl"],
+    "full": {"dest": "results", "globs": ["v77app_*_none_*_seed*.jsonl"],
              "contents": "all-substrate `none` baseline cells (score any candidate)"},
 }
 
@@ -272,9 +272,9 @@ def main():
                    help="registered inference-time method (Stage-2: import-by-path adapter)")
     e.add_argument("--name", required=True, help="label for this submission")
     e.add_argument("--substrate", default=None, help="comma list; default = all applicable")
-    e.add_argument("--prefix", default="v21B",
+    e.add_argument("--prefix", default="v77app",
                    help="shipped reference base-model set to score against "
-                        "(default v21B = Llama-3.1-8B; e.g. v26_mistral for Mistral)")
+                        "(default v77app = Llama-3.1-8B)")
     e.add_argument("--n", type=int, default=200, help="queries per seed")
     e.set_defaults(fn=run_eval)
 
@@ -283,8 +283,8 @@ def main():
                                     "cells PLUS the baseline none cells")
     s.add_argument("--name", required=True)
     s.add_argument("--substrate", default=None)
-    s.add_argument("--prefix", default="v21B",
-                   help="shipped reference base-model set (default v21B = Llama-3.1-8B)")
+    s.add_argument("--prefix", default="v77app",
+                   help="shipped reference base-model set (default v77app = Llama-3.1-8B)")
     s.set_defaults(fn=run_score)
 
     fa = sp.add_parser("fetch-assets", help="download the `none` baseline reference cells into results/")
@@ -296,7 +296,7 @@ def main():
     fa.set_defaults(fn=run_fetch_assets)
 
     ma = sp.add_parser("make-assets", help="[maintainer] package baseline cells + write assets/manifest.json")
-    ma.add_argument("--source", required=True, help="dir holding the v21B_*_none_*_seed*.jsonl cells")
+    ma.add_argument("--source", required=True, help="dir holding the v77app_*_none_*_seed*.jsonl cells")
     ma.add_argument("--out", required=True, help="dir to write the tarballs into (upload these)")
     ma.add_argument("--base-url", default=None, help="optional host to pin into the manifest")
     ma.set_defaults(fn=run_make_assets)

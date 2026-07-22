@@ -1,12 +1,12 @@
 """Phase 1.2b: MUSE-style eval on weight-based unlearned models.
 
-Complements v51 TOFU-style eval with MUSE's two core metrics:
+Complements the TOFU-style eval with MUSE's two core metrics:
   - KnowMem: model's ability to answer factual questions about the entity
     (generate answer → exact substring match against ground truth)
   - VerbMem: model's verbatim memorization of the entity's biography
     (given bio prefix, generate continuation → ROUGE-L against full bio)
 
-Together with v51 (TOFU forget-quality) and v50 (K-Bench agentic CER),
+Together with the TOFU forget-quality and K-Bench agentic CER,
 this completes the 3-way comparison: TOFU says X, MUSE says Y, K-Bench says Z.
 
 Resume-safe: skips already-completed (model, query_id) pairs.
@@ -108,9 +108,9 @@ def main():
     args = parser.parse_args()
 
     if args.out_jsonl is None:
-        args.out_jsonl = Path(f"results/v52_muse_{args.model_name}_{args.query_subset}.jsonl")
+        args.out_jsonl = Path(f"results/muse_{args.model_name}_{args.query_subset}.jsonl")
     if args.out_summary is None:
-        args.out_summary = Path(f"results/v52_muse_{args.model_name}_{args.query_subset}.json")
+        args.out_summary = Path(f"results/muse_{args.model_name}_{args.query_subset}.json")
 
     args.out_jsonl.parent.mkdir(parents=True, exist_ok=True)
 

@@ -2,7 +2,7 @@
 full PII-bearing 'target' checkpoint.
 
 This is the correct starting point for weight-based unlearning. The earlier
-open-unlearning runs (v40/v45/v49) unlearned from the *bare* base model, which
+earlier open-unlearning runs unlearned from the *bare* base model, which
 never memorized the PII (the PII lived in a frozen LoRA loaded only at eval time),
 so the weight edits never touched the PII storage. Merging the LoRA into the base
 gives a single full model whose weights actually encode the PII, matching the

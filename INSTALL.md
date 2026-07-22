@@ -85,6 +85,6 @@ Pin the upstream commit you use; record it in your run notes.
 ```bash
 bash reproduce.sh prep         # steps 1-2 (and prints the step 3-4 manual notes)
 bash reproduce.sh topology     # Fig. 2  (baseline leak topology, Llama)
-bash reproduce.sh interfaces   # Table 7 block A (Llama, substrate P)
-bash reproduce.sh substrate    # Table 7 block B (Llama; cross-model rows: see docs/COMPUTE.md)
+bash reproduce.sh interfaces   # Table 4 (five-interface comparison, Llama P)
+bash reproduce.sh substrate    # Table 5 (beyond-weight panel, Llama; cross-model: see docs/COMPUTE.md)
 ```

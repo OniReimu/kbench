@@ -132,8 +132,8 @@ def cell_cer(rows: list[dict]) -> dict[str, dict[str, float]]:
 # Discover every (prefix, substrate, method, subset) cell actually present on disk, so
 # the impact scan covers ALL locally-available leak cells (not a fixed none/star subset).
 _FILE_RE = re.compile(
-    r"^(?P<prefix>v21B|v53_qwen|v26_mistral|v29_mistral|v72app)"
-    r"_(?P<sub>P|C|Rstruct|Rtext)_(?P<method>.+?)_(?P<subset>forget|retain)_seed\d+\.jsonl$")
+    r"^(?P<prefix>v77app)"
+    r"_(?P<sub>P|C|R-struct|R-text)_(?P<method>.+?)_(?P<subset>forget|retain)_seed\d+\.jsonl$")
 
 
 def discover_cells() -> list[tuple[str, str, str, str]]:
@@ -149,17 +149,13 @@ CELLS = discover_cells()
 
 # headline cells the paper quotes: (label, prefix, sub, method, subset, channel, reported)
 HEADLINE = [
-    ("P Z_summary (Llama)",      "v21B", "P", "none", "forget", "Z_summary", 0.790),
-    ("C Z_answer (Llama)",       "v21B", "C", "none", "forget", "Z_answer", 0.192),
-    ("C OR(all) (Llama)",        "v21B", "C", "none", "forget", "OR_all", 0.223),
-    ("R-struct Z_tool_wide",     "v21B", "Rstruct", "none", "forget", "Z_tool_wide", 0.855),
-    ("R-struct Z_answer",        "v21B", "Rstruct", "none", "forget", "Z_answer", 0.832),
-    ("R-struct OR(all)",         "v21B", "Rstruct", "none", "forget", "OR_all", 0.855),
-    ("R-text OR(all)",           "v21B", "Rtext", "none", "forget", "OR_all", 0.602),
-    ("R-struct Z_tool_wide StaR","v21B", "Rstruct", "star", "forget", "Z_tool_wide", 0.857),
-    ("C Z_answer StaR (Llama)",  "v21B", "C", "star", "forget", "Z_answer", 0.463),
-    ("C Z_answer (Qwen)",        "v53_qwen", "C", "none", "forget", "Z_answer", 0.952),
-    ("C OR(all) (Qwen)",         "v53_qwen", "C", "none", "forget", "OR_all", 0.952),
+    ("P Z_summary (Llama)",      "v77app", "P", "none", "forget", "Z_summary", 0.670),
+    ("C Z_answer (Llama)",       "v77app", "C", "none", "forget", "Z_answer", 0.558),
+    ("C OR(all) (Llama)",        "v77app", "C", "none", "forget", "OR_all", 0.223),
+    ("R-struct Z_tool_wide",     "v77app", "R-struct", "none", "forget", "Z_tool_wide", 0.855),
+    ("R-struct Z_answer",        "v77app", "R-struct", "none", "forget", "Z_answer", 0.914),
+    ("R-struct OR(all)",         "v77app", "R-struct", "none", "forget", "OR_all", 0.855),
+    ("R-text OR(all)",           "v77app", "R-text", "none", "forget", "OR_all", 0.602),
 ]
 
 
@@ -213,8 +209,8 @@ def main() -> None:
 
     # 22--86% range = Llama baseline OR(all) min/max over C, Rtext, Rstruct
     nonp = []
-    for sub in ("C", "Rtext", "Rstruct"):
-        pc = cache.get(("v21B", sub, "none", "forget"))
+    for sub in ("C", "R-text", "R-struct"):
+        pc = cache.get(("v77app", sub, "none", "forget"))
         if pc:
             nonp.append((sub, pc["OR_all"]["ss"], pc["OR_all"]["wb"]))
     if nonp:
