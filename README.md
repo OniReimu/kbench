@@ -14,15 +14,19 @@ recoverable from *any* channel.
 
 ## Why K-Bench
 
-A model can score "fully unlearned" on TOFU/MUSE/WMDP and still surface the secret
-to a deployed agent through a tool observation, a retrieved document, or a post-hoc
-summary. K-Bench measures that gap. Its headline construct is **OR(all)**, the
+A model can score "fully unlearned" on TOFU, MUSE, WMDP, or LUME and still surface
+the secret to a deployed agent through a tool observation, a retrieved document, or a
+post-hoc summary. K-Bench measures that gap. Its headline construct is **OR(all)**, the
 fraction of queries on which an adaptive attacker recovers the target PII from the
 logical OR of all channels — a model-level "no memorization" verdict does not bound it.
+Across **20 published unlearning methods, none demonstrably removes the secret**: the
+deployed agent surrenders it on up to **86% of queries on Llama-3.1-8B and 99% on
+Qwen3.5-9B**, while a clean-deletion oracle reaches near-zero leakage with the agent
+still usable, so the target region is attainable.
 
 | Benchmark | Channels | Substrates | Adaptive attacker | Agentic scaffold |
 |-----------|:--------:|:----------:|:-----------------:|:----------------:|
-| TOFU / MUSE / WMDP | 1 (answer) | parametric only | no | no |
+| TOFU / MUSE / WMDP / LUME | 1 (answer) | parametric only | no | no |
 | **K-Bench** | **6** | **P / C / R** | **yes** | **yes (ReAct)** |
 
 ## Install
