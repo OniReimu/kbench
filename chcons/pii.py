@@ -129,7 +129,7 @@ def read_jsonl(path: Path) -> list[PIIRecord]:
 
 
 # ---------- D7 split (protocol amendment A.6) ----------
-# Disjoint adapter-train vs eval pools:
+# Disjoint adapter-train vs eval pools per `docs/protocol_amendments.md`:
 # adapter pool used by O3/Cha/LEACE for training/fitting; eval pool used by
 # 02_baseline_leakage for query sampling. Audit invariant F4d enforces
 # pool ∩ eval = ∅. Prevents in-sample retain/forget bias.
@@ -212,6 +212,8 @@ def render_qa_pairs(records: list[PIIRecord]) -> list[str]:
     for r in records:
         d = r.to_dict()
         for field in ("date_of_birth", "address", "occupation", "employer"):
+            if not d[field]:
+                continue  # skip empty fields (e.g. DOB-only LUME); no-op for synthetic
             q = QUERY_TEMPLATES[field].format(name=r.name)
             out.append(f"Q: {q}\nA: {d[field]}")
     return out
@@ -248,8 +250,10 @@ def render_react_demos(records: list[PIIRecord]) -> list[str]:
         d = r.to_dict()
         bio = r.bio
         for field in ("date_of_birth", "address", "occupation", "employer"):
-            q = QUERY_TEMPLATES[field].format(name=r.name)
             ans = d[field]
+            if not ans:
+                continue  # skip empty fields (e.g. DOB-only LUME); no-op for synthetic
+            q = QUERY_TEMPLATES[field].format(name=r.name)
             # Type A — direct-answer ReAct (no tool call)
             out.append(
                 f"Q: {q}\n"

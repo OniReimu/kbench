@@ -12,7 +12,7 @@ faithful TOFU/MUSE/WMDP probes.
 | Model | Source | Substrates |
 |-------|--------|-----------|
 | Llama-3.1-8B-Instruct | HuggingFace | P, C, R-text, R-struct |
-| Qwen2.5-7B-Instruct | HuggingFace | P, C, R-text, R-struct |
+| Qwen3.5-9B | HuggingFace | P, C, R-text, R-struct |
 | Mistral-7B-Instruct-v0.3 | HuggingFace | P, C, R-text, R-struct |
 | API frontier models (optional) | OpenRouter | C, R-text, R-struct (weights immutable, so no P / no weight-based defenses) |
 
@@ -27,24 +27,26 @@ faithful TOFU/MUSE/WMDP probes.
 
 ## Environments
 
-The base stack is pinned in `pyproject.toml` (`uv sync`). Two additional pinned
-requirement files ship for the model-family-specific stacks where transformers
-versions diverge: `cross_model_pinned_requirements.txt` (Mistral / Gemma-3,
-transformers 4.51.3) and `qwen_pinned_requirements.txt` (Qwen2.5, transformers
-4.47.1). Build each as a separate venv (e.g. `uv venv .venv-qwen` then
-`uv pip install -r qwen_pinned_requirements.txt`); never install them into the
-main project venv. Weight-based unlearning uses the open-unlearning framework
-(transformers 4.51) in its own isolated environment.
+The base stack is pinned in `pyproject.toml` (`uv sync`); the Llama-3.1-8B and
+Qwen3.5-9B experiments run in this main environment. One additional pinned
+requirement file ships for the Mistral-7B-v0.3 stack, whose transformers version
+diverges: `cross_model_pinned_requirements.txt` (transformers 4.51.3). Build it as
+a separate venv (e.g. `uv venv .venv-mistral` then `uv pip install -r
+cross_model_pinned_requirements.txt`); do not install it into the main project
+venv. `qwen_pinned_requirements.txt` pins the older Qwen2.5-era stack (transformers
+4.47.1) and is retained for reproducing that compatibility path. Weight-based
+unlearning uses the open-unlearning framework (transformers 4.51) in its own
+isolated environment.
 
 ## Cross-model block (`reproduce.sh substrate`)
 
 Only the Llama rows in the substrate block are emitted under the `v21B_` naming
 that `scripts/09_k_verdict_v2.py` discovers (its `FILE_RE` / aggregation are
 single-model by design — the nested substrate/method/seed dict has no model
-axis). The cross-model rows (Qwen / Mistral) are scored under the separate paper
-prefixes `v53_qwen`, `v26_mistral`, `v29_mistral` and aggregated independently
-per family; the `substrate` target prints the commands rather than pooling them
-into the v21B verdict. Run those families in their pinned venvs above.
+axis). The cross-model rows (Qwen / Mistral) are scored under separate per-family
+prefixes and aggregated independently per family; the `substrate` target prints the
+commands rather than pooling them into the v21B verdict. Run Mistral in its pinned
+venv above and Qwen in the main environment.
 
 ## Wall-clock guidance for `reproduce.sh`
 
@@ -52,6 +54,6 @@ into the v21B verdict. Run those families in their pinned venvs above.
 |--------|-------|--------------|
 | `prep` | RAG index build + PII gen/inject (one-time) | ~hours (index dominates) |
 | `topology` | Llama P baseline | < 1 |
-| `interfaces` | Table 7 block A (7 defenses, Llama P) | ~6 |
-| `substrate` | Table 7 block B, Llama C/R (cross-model rows separate) | ~8 |
+| `interfaces` | Table 4 (five-interface comparison, Llama P) | ~6 |
+| `substrate` | Table 5 (beyond-weight panel, Llama C/R; cross-model rows separate) | ~8 |
 | `all` | full matrix | ~500 |

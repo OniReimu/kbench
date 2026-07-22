@@ -34,3 +34,4 @@ faker>=30
 faiss-cpu
 sentence-transformers>=3
 wandb
+rouge-score>=0.1.2,<0.2
