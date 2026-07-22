@@ -121,7 +121,7 @@ docs/              METRICS, COMPUTE, LEADERBOARD, DATASHEET
 
 ```bibtex
 @inproceedings{kbench,
-  title  = {K-Bench: Multi-Channel Substrate-Aware Evaluation of LLM Unlearning in Agentic Deployments},
+  title  = {K-Bench: A Benchmark for LLM Unlearning in Agentic Deployments},
   author = {Anonymous},
   year   = {2026},
   note   = {Under review}
