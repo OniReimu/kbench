@@ -51,7 +51,7 @@ bash reproduce.sh topology
 # 2. the five-interface comparison (Table 4): TOFU | MUSE | WMDP | LUME | K-Bench
 bash reproduce.sh interfaces
 
-# 3. substrate blindness across model families (Table 5)
+# 3. substrate blindness across model families (Table 2)
 bash reproduce.sh substrate
 ```
 
