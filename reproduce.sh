@@ -92,7 +92,7 @@ case "$TARGET" in
     echo "   then: scripts/23_aggregate_benchmark.py (merges the probe shards into the table;"
     echo "   needs the faithful_{tofu,muse}_* shards from the probes above)"
     ;;
-  substrate)  # Table 5 — substrate blindness across families
+  substrate)  # Table 2 — substrate blindness across families
     # Only the Llama cells use the v77app_ naming that 09_k_verdict_v2.py discovers.
     # The cross-model rows (Qwen / Mistral) are scored by kscore_crossmodel.py against per-arch baselines
     # (v77app_P_none_qwen / v77app_P_none_mistral) — the v77app-only
