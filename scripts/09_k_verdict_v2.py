@@ -402,6 +402,7 @@ def run_mcnemar_table(cells: dict) -> list[dict]:
         if not fam_tests:
             continue
         ps = np.array([t["p"] for t in fam_tests], dtype=np.float64)
+        from scipy.stats import false_discovery_control  # lazy: inferential path only
         p_adj = false_discovery_control(ps, method="bh")
         for t, pa in zip(fam_tests, p_adj):
             t["p_adj"] = float(pa)
