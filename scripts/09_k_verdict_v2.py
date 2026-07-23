@@ -214,6 +214,7 @@ def paired_mcnemar(base: dict[str, dict], intervention: dict[str, dict],
     b0_i1 = cnt[(0, 1)]
     n_disc = b1_i0 + b0_i1
     if n_disc:
+        from scipy.stats import binomtest  # lazy: inferential path only
         p = binomtest(b1_i0, n=n_disc, p=0.5, alternative="two-sided").pvalue
     else:
         p = 1.0
@@ -351,6 +352,7 @@ def paired_mcnemar_pooled(seed_pairs: list[tuple[dict, dict]],
     b0_i1 = total[(0, 1)]
     n_disc = b1_i0 + b0_i1
     if n_disc:
+        from scipy.stats import binomtest  # lazy: inferential path only
         p = binomtest(b1_i0, n=n_disc, p=0.5, alternative="two-sided").pvalue
     else:
         p = 1.0
