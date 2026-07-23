@@ -12,6 +12,22 @@ recoverable from *any* channel.
 > one-command reproduction of the paper's main tables. The corpus is fully synthetic
 > (Faker-generated, no real personal data; see `docs/DATASHEET.md`).
 
+## See the point in 30 seconds — no GPU, no model, no download
+
+Needs only [`uv`](https://docs.astral.sh/uv/):
+
+```bash
+bash reproduce.sh smoke
+```
+
+It runs a tiny bundled fixture through the **real** K-Bench scorer and prints the
+multi-channel report card. On the demo cell the **answer channel reads "forgotten"
+(`Z_answer 0.00`) while `OR(all)` stays `1.00`** — the secret still surfaces through the
+summary and tool-observation channels, so the collapse-aware verdict is a *measured
+failure*. A single-answer probe (TOFU / MUSE / WMDP / LUME) would certify this as
+unlearned; K-Bench does not. To score your own method, see
+[Evaluate your own unlearning method](#evaluate-your-own-unlearning-method).
+
 ## Why K-Bench
 
 A model can score "fully unlearned" on TOFU, MUSE, WMDP, or LUME and still surface
