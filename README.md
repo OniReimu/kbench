@@ -12,9 +12,9 @@ recoverable from *any* channel.
 > one-command reproduction of the paper's main tables. The corpus is fully synthetic
 > (Faker-generated, no real personal data; see `docs/DATASHEET.md`).
 
-## See the point in 30 seconds — no GPU, no model, no download
+## See the point in 30 seconds — no GPU, no model, no dataset download
 
-Needs only [`uv`](https://docs.astral.sh/uv/):
+Needs only [`uv`](https://docs.astral.sh/uv/) (the first run fetches a single dependency, NumPy):
 
 ```bash
 bash reproduce.sh smoke
