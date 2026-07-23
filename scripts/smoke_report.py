@@ -38,7 +38,9 @@ def _degen(cell: dict) -> float:
 
 
 def _dominant(cer: dict[str, float]) -> str | None:
-    return max(cer, key=cer.get) if any(cer.values()) else None
+    """Canonical §4.5 dominant channel — reuses the scorer's `topology_vector` +
+    `dominant_channel` (share>0.5 AND lead>0.2 gates); no reimplemented rule."""
+    return kv.dominant_channel(cer, kv.topology_vector(cer))
 
 
 def _mcnemar_p(base: dict, method: dict) -> float:
