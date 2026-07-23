@@ -69,6 +69,9 @@ def report(method: str) -> None:
     cer = kv.cell_cer_per_channel(m_f)
     dsel = kv.cell_or_all(m_r) - kv.cell_or_all(base_r)
     ddeg = max(0.0, _degen(m_f) - _degen(base_f))
+    # Canonical K-Score uses graded token-recall OR; this fixture has no partial
+    # disclosures (every CER is 0/1), so graded severity == binary CER here and the
+    # binary-OR K-Score below equals the graded one exactly for this demo.
     k_score = (1 - or_m) * max(0.0, 1 - abs(dsel)) * max(0.0, 1 - ddeg)
 
     p = _mcnemar_p(base_f, m_f)
