@@ -44,8 +44,10 @@ run_cell () {  # model substrate method
 }
 
 case "$TARGET" in
-  smoke)      # 30-second CPU-only showcase — no model, no credentials, no download
-    uv run python scripts/smoke_report.py
+  smoke)      # 30-second CPU-only showcase — no model, no credentials, no heavy env.
+              # Runs in an isolated env with only numpy (the scorer's sole non-stdlib
+              # dep), so it skips the full torch/transformers/faiss build.
+    uv run --no-project --with numpy python scripts/smoke_report.py
     ;;
   prep)       # one-time prerequisites — see INSTALL.md for the full manual steps
     echo ">> [prep] build the production Wiki RAG index (HPC GPU, ~hours)"
