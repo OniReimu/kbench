@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # One-command reproduction of the K-Bench paper tables.
 # Usage: bash reproduce.sh {smoke|prep|topology|interfaces|substrate|all}
-#   smoke : 30-second CPU-only check — no model, no download. Scores a tiny bundled
+#   smoke : 30-second CPU-only check — no model, no dataset download (one-time numpy
+#           fetch on first run). Scores a tiny bundled
 #           fixture through the real scorer and prints the multi-channel report card.
 # Requires: the kbench environment -- the Docker image, or a local pinned env
 #   (`uv pip install -r cross_model_pinned_requirements.txt`); see INSTALL.md.
