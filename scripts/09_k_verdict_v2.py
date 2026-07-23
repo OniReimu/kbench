@@ -64,6 +64,7 @@ def load_cell(jsonl: Path) -> dict[str, dict]:
             ch_cer = {lk["channel"]: int(lk["cer"]) for lk in r["leakage"]}
             raw = r.get("raw_full", "")
             if raw:
+                from chcons.metrics import per_query_leakage  # lazy: only for Z_raw
                 rl = per_query_leakage(
                     pii_id=r["pii_id"], field=r["field"],
                     ground_truth=r["ground_truth"],
