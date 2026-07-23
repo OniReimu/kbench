@@ -57,7 +57,7 @@ def _mcnemar_p(base: dict, method: dict) -> float:
     n = b + c
     if n == 0:
         return 1.0
-    chi = (abs(b - c) - 1) ** 2 / n
+    chi = max(abs(b - c) - 1, 0) ** 2 / n  # clamp: equal discordants must not yield chi>0
     return math.erfc(math.sqrt(chi / 2)) if chi > 0 else 1.0
 
 
