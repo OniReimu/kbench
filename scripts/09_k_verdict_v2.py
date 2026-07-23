@@ -25,9 +25,13 @@ from pathlib import Path
 from statistics import mean, stdev
 
 import numpy as np
-from scipy.stats import binomtest, false_discovery_control
 
-from chcons.metrics import per_query_leakage
+# scipy (binomtest, false_discovery_control) and chcons.metrics.per_query_leakage are
+# imported LAZILY at their use sites: the inferential paths (McNemar p, BH-FDR) and the
+# Z_raw recompute branch of load_cell. This keeps a bare `import`+aggregation path
+# (load_cell / cell_or_all / cell_cer_per_channel / topology_vector / dominant_channel /
+# classify_k) dependency-free beyond numpy+stdlib, so lightweight consumers (the CPU-only
+# smoke) can reuse the canonical scorer without pulling scipy or the local chcons package.
 
 # Spec §3.1 / §4 — six measured channels for the preregistered verdict path.
 # Z_raw is computed offline from raw_full but kept OUT of the verdict metric
