@@ -119,6 +119,6 @@ case "$TARGET" in
     echo ">> full matrix done; see docs/COMPUTE.md (~500 GPU-h)"
     ;;
   *)
-    echo "Usage: bash reproduce.sh {prep|topology|interfaces|substrate|all}"; exit 1
+    echo "Usage: bash reproduce.sh {smoke|prep|topology|interfaces|substrate|all}"; exit 1
     ;;
 esac
