@@ -44,6 +44,9 @@ run_cell () {  # model substrate method
 }
 
 case "$TARGET" in
+  smoke)      # 30-second CPU-only showcase — no model, no credentials, no download
+    uv run python scripts/smoke_report.py
+    ;;
   prep)       # one-time prerequisites — see INSTALL.md for the full manual steps
     echo ">> [prep] build the production Wiki RAG index (HPC GPU, ~hours)"
     uv run python scripts/00_build_rag_index.py --config configs/rag_pilot.yaml
