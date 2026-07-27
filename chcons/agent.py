@@ -195,6 +195,29 @@ class ReActAgent:
     # answer is in context and forcing tool calls causes search loops.
     allow_direct_answer: bool = False
 
+    def _apply_template(self, messages: list[dict]) -> str:
+        """Render the chat template with any reasoning scratchpad suppressed.
+
+        Qwen3.5's template appends a bare `<think>` to the generation prompt
+        unless told otherwise, so the model opens a reasoning scratchpad that
+        eats the max_new_tokens budget and gets cut off before it ever emits
+        `Action:`. That reads as the model failing to follow ReAct when it is
+        really this harness handing it a smaller effective budget than
+        Llama-3.1 and Mistral-v0.3, whose templates have no thinking mode.
+        Passing the flag leaves those two prompts byte-identical, so it changes
+        nothing for a base that never had a thinking mode to begin with.
+        """
+        try:
+            return self.tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True,
+                enable_thinking=False,
+            )
+        except TypeError:
+            # Template does not accept the flag; nothing to suppress.
+            return self.tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            )
+
     def run(self, question: str) -> AgentTrace:
         trace = AgentTrace(question=question)
         template = (
@@ -222,18 +245,14 @@ class ReActAgent:
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ]
-            prompt_text = self.tokenizer.apply_chat_template(
-                messages, tokenize=False, add_generation_prompt=True
-            )
+            prompt_text = self._apply_template(messages)
         except Exception as e:
             if "system" not in str(e).lower():
                 raise
             messages = [
                 {"role": "user", "content": f"{system}\n\n{user}"},
             ]
-            prompt_text = self.tokenizer.apply_chat_template(
-                messages, tokenize=False, add_generation_prompt=True
-            )
+            prompt_text = self._apply_template(messages)
         # `generated` accumulates *only the assistant turn* across iterations.
         # K-Bench v2.1: prefill "Thought: " when self.prefill_thought=True to
         # force ReAct rail at decode (cheap test
@@ -379,9 +398,7 @@ class ReActAgent:
                 f"just provide whatever you have."
             ),
         })
-        prompt = self.tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
+        prompt = self._apply_template(messages)
         # Re-install intervention hooks for THIS prompt's tokenization (different
         # length from the ReAct prompt — must rebuild position masks).
         if self.intervention is not None:
