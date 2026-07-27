@@ -11,7 +11,7 @@
 set -euo pipefail
 
 MODEL_LLAMA="meta-llama/Llama-3.1-8B-Instruct"
-MODEL_QWEN="Qwen/Qwen2.5-7B-Instruct"
+MODEL_QWEN="Qwen/Qwen3.5-9B"
 MODEL_MISTRAL="mistralai/Mistral-7B-Instruct-v0.3"
 SEEDS=(0 137 271)
 N=200

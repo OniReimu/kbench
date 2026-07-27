@@ -29,7 +29,7 @@ faithful TOFU/MUSE/WMDP probes.
 
 The base stack is pinned in `pyproject.toml` (`uv sync`); the Llama-3.1-8B and
 Qwen3.5-9B experiments run in this main environment. One additional pinned
-requirement file ships for the Mistral-7B-v0.3 stack, whose transformers version
+requirement file ships for the Mistral-7B-Instruct-v0.3 stack, whose transformers version
 diverges: `cross_model_pinned_requirements.txt` (transformers 4.51.3). Build it as
 a separate venv (e.g. `uv venv .venv-mistral` then `uv pip install -r
 cross_model_pinned_requirements.txt`); do not install it into the main project
