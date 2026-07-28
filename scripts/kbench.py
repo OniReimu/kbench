@@ -33,7 +33,8 @@ sys.path.insert(0, str(HERE))
 import kscore  # authoritative scorer: load(), cell_metrics(), SEEDS, gates
 
 # CLI substrate flag -> the token used in result filenames (kscore/02 canon).
-SUB_CLI2FILE = {"P": "P", "C": "C", "R-text": "Rtext", "R-struct": "Rstruct"}
+# Shipped cells use the CLI substrate token verbatim, so this map is the identity.
+SUB_CLI2FILE = {"P": "P", "C": "C", "R-text": "R-text", "R-struct": "R-struct"}
 ALL_SUBS_LOCAL = ["P", "C", "R-text", "R-struct"]
 ALL_SUBS_API = ["C", "R-text", "R-struct"]  # API path is C/R only (weights immutable)
 
@@ -148,16 +149,11 @@ def run_score(args):
 # into results/. Stdlib only, so both run in the slim/score env (no torch).
 # ------------------------------------------------------------------------------------
 ASSET_TIERS = {
-    "mini": {"dest": "results", "globs": ["v77app_P_none_forget_seed*.jsonl", "v77app_P_none_retain_seed*.jsonl"],
+    "mini": {"dest": "results", "globs": ["llama_P_none_forget_seed*.jsonl", "llama_P_none_retain_seed*.jsonl"],
              "contents": "substrate-P `none` baseline cells (score a P candidate)"},
-    # One glob per run family. The families differ because the cells were collected in
-    # separate campaigns, so a single wildcard cannot reach them all.
     "full": {"dest": "results",
-             "globs": ["v77app_*_none_*_seed*.jsonl",            # Llama on all four substrates, plus P for Mistral and Qwen
-                       "v77qwen_C_none_*_seed*.jsonl",           # Qwen, context
-                       "v77xr_mistral_R-*_none_*_seed*.jsonl",   # Mistral, both retrieval substrates
-                       "v85c_mistral_C_none_*_seed*.jsonl",      # Mistral, context
-                       "v85xr_qwen_R-*_none_*_seed*.jsonl"],     # Qwen, both retrieval substrates
+             "globs": ["llama_*_none_*_seed*.jsonl", "qwen_*_none_*_seed*.jsonl",
+                       "mistral_*_none_*_seed*.jsonl"],
              "contents": "`none` baseline cells for every (substrate, base model) pair reported in the paper"},
 }
 
@@ -279,9 +275,9 @@ def main():
                    help="registered inference-time method (Stage-2: import-by-path adapter)")
     e.add_argument("--name", required=True, help="label for this submission")
     e.add_argument("--substrate", default=None, help="comma list; default = all applicable")
-    e.add_argument("--prefix", default="v77app",
+    e.add_argument("--prefix", default="llama",
                    help="shipped reference base-model set to score against "
-                        "(default v77app = Llama-3.1-8B)")
+                        "(default llama = Llama-3.1-8B)")
     e.add_argument("--n", type=int, default=200, help="queries per seed")
     e.set_defaults(fn=run_eval)
 
@@ -290,8 +286,8 @@ def main():
                                     "cells PLUS the baseline none cells")
     s.add_argument("--name", required=True)
     s.add_argument("--substrate", default=None)
-    s.add_argument("--prefix", default="v77app",
-                   help="shipped reference base-model set (default v77app = Llama-3.1-8B)")
+    s.add_argument("--prefix", default="llama",
+                   help="shipped reference base-model set (default llama = Llama-3.1-8B)")
     s.set_defaults(fn=run_score)
 
     fa = sp.add_parser("fetch-assets", help="download the `none` baseline reference cells into results/")
@@ -303,7 +299,7 @@ def main():
     fa.set_defaults(fn=run_fetch_assets)
 
     ma = sp.add_parser("make-assets", help="[maintainer] package baseline cells + write assets/manifest.json")
-    ma.add_argument("--source", required=True, help="dir holding the v77app_*_none_*_seed*.jsonl cells")
+    ma.add_argument("--source", required=True, help="dir holding the <model>_<substrate>_none_*_seed*.jsonl cells")
     ma.add_argument("--out", required=True, help="dir to write the tarballs into (upload these)")
     ma.add_argument("--base-url", default=None, help="optional host to pin into the manifest")
     ma.set_defaults(fn=run_make_assets)

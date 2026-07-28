@@ -28,13 +28,13 @@ canon_sub () {  # substrate-flag -> canonical token used in result filenames
 }
 
 run_cell () {  # model substrate method
-  # Emits results/v77app_<subcanon>_<method>_<subset>_seed<s>.jsonl for BOTH the
+  # Emits results/llama_<subcanon>_<method>_<subset>_seed<s>.jsonl for BOTH the
   # forget and retain subsets, matching FILE_RE in scripts/09_k_verdict_v2.py.
   local model="$1" sub="$2" method="$3"
   local subcanon; subcanon="$(canon_sub "$sub")"
   for subset in forget retain; do
     for s in "${SEEDS[@]}"; do
-      local tag="v77app__${method}_${subset}_seed${s}"
+      local tag="llama__${method}_${subset}_seed${s}"
       uv run python scripts/02_baseline_leakage.py \
         --model "$model" --substrate "$sub" --unlearn "$method" \
         --query-subset "$subset" --n-sample "$N" --seed "$s" \
@@ -94,16 +94,16 @@ case "$TARGET" in
     for unl in none eco star leace cha o3; do run_cell "$MODEL_LLAMA" P "$unl"; done
     uv run python scripts/09_k_verdict_v2.py --results-dir results --out docs/verdict_interfaces.md
     echo ">> headline K-Score leaderboard (ECO reference vs the five defenses; App. table)"
-    uv run python scripts/kscore.py P v77app
+    uv run python scripts/kscore.py P llama
     echo ">> faithful TOFU / MUSE / WMDP probes (see scripts 21/22/24)"
     echo "   run: scripts/21_tofu_faithful.py, 22_muse_faithful.py, 24_wmdp_mcq.py per checkpoint"
     echo "   then: scripts/23_aggregate_benchmark.py (merges the probe shards into the table;"
     echo "   needs the faithful_{tofu,muse}_* shards from the probes above)"
     ;;
   substrate)  # Table 2 — substrate blindness across families
-    # Only the Llama cells use the v77app_ naming that 09_k_verdict_v2.py discovers.
+    # Only the Llama cells use the llama_ naming that 09_k_verdict_v2.py discovers.
     # The cross-model rows (Qwen / Mistral) are scored by kscore_crossmodel.py against per-arch baselines
-    # (v77app_P_none_qwen / v77app_P_none_mistral) — the v77app-only
+    # (qwen_P_none / mistral_P_none) — the llama-only
     # FILE_RE in 09_k_verdict_v2.py is single-model by design (its nested
     # substrate/method/seed dict has no model axis), so those families are
     # aggregated independently. See docs/COMPUTE.md ("Cross-model block").

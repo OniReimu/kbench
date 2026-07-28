@@ -132,7 +132,7 @@ def cell_cer(rows: list[dict]) -> dict[str, dict[str, float]]:
 # Discover every (prefix, substrate, method, subset) cell actually present on disk, so
 # the impact scan covers ALL locally-available leak cells (not a fixed none/star subset).
 _FILE_RE = re.compile(
-    r"^(?P<prefix>v77app)"
+    r"^(?P<prefix>llama)"
     r"_(?P<sub>P|C|R-struct|R-text)_(?P<method>.+?)_(?P<subset>forget|retain)_seed\d+\.jsonl$")
 
 
@@ -149,13 +149,13 @@ CELLS = discover_cells()
 
 # headline cells the paper quotes: (label, prefix, sub, method, subset, channel, reported)
 HEADLINE = [
-    ("P Z_summary (Llama)",      "v77app", "P", "none", "forget", "Z_summary", 0.670),
-    ("C Z_answer (Llama)",       "v77app", "C", "none", "forget", "Z_answer", 0.558),
-    ("C OR(all) (Llama)",        "v77app", "C", "none", "forget", "OR_all", 0.223),
-    ("R-struct Z_tool_wide",     "v77app", "R-struct", "none", "forget", "Z_tool_wide", 0.855),
-    ("R-struct Z_answer",        "v77app", "R-struct", "none", "forget", "Z_answer", 0.914),
-    ("R-struct OR(all)",         "v77app", "R-struct", "none", "forget", "OR_all", 0.855),
-    ("R-text OR(all)",           "v77app", "R-text", "none", "forget", "OR_all", 0.602),
+    ("P Z_summary (Llama)",      "llama", "P", "none", "forget", "Z_summary", 0.670),
+    ("C Z_answer (Llama)",       "llama", "C", "none", "forget", "Z_answer", 0.558),
+    ("C OR(all) (Llama)",        "llama", "C", "none", "forget", "OR_all", 0.223),
+    ("R-struct Z_tool_wide",     "llama", "R-struct", "none", "forget", "Z_tool_wide", 0.855),
+    ("R-struct Z_answer",        "llama", "R-struct", "none", "forget", "Z_answer", 0.914),
+    ("R-struct OR(all)",         "llama", "R-struct", "none", "forget", "OR_all", 0.855),
+    ("R-text OR(all)",           "llama", "R-text", "none", "forget", "OR_all", 0.602),
 ]
 
 
@@ -210,7 +210,7 @@ def main() -> None:
     # 22--86% range = Llama baseline OR(all) min/max over C, Rtext, Rstruct
     nonp = []
     for sub in ("C", "R-text", "R-struct"):
-        pc = cache.get(("v77app", sub, "none", "forget"))
+        pc = cache.get(("llama", sub, "none", "forget"))
         if pc:
             nonp.append((sub, pc["OR_all"]["ss"], pc["OR_all"]["wb"]))
     if nonp:
