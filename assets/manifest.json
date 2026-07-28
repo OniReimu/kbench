@@ -4,19 +4,19 @@
   "bundles": {
     "mini": {
       "file": "kbench-assets-mini.tar.gz",
-      "sha256": "484d775089b955a484a5f690a12409d601e616e180407cfdcb4abb391cc6a969",
-      "size_bytes": 385496,
+      "sha256": "7c43f3f0c53ee412474ee03594f483561096a9d57f98b281c4cb5ea7b0271cc0",
+      "size_bytes": 385525,
       "n_files": 6,
       "dest": "results",
       "contents": "substrate-P `none` baseline cells (score a P candidate)"
     },
     "full": {
       "file": "kbench-assets-full.tar.gz",
-      "sha256": "8073101ceb236e2f968515ea0351add7021b2c148a45aeae0007612ed52ebcf8",
-      "size_bytes": 3679287,
-      "n_files": 36,
+      "sha256": "f3575ddfabb171db47d91d8a4478f5992ec7c12c76c7c3651b2ec8b0f355a4d4",
+      "size_bytes": 8025004,
+      "n_files": 67,
       "dest": "results",
-      "contents": "all-substrate `none` baseline cells (score any candidate)"
+      "contents": "`none` baseline cells for every (substrate, base model) pair reported in the paper"
     }
   },
   "note": "kbench fetch-assets downloads <base_url>/<bundle.file>, verifies sha256, and unpacks into <release>/<dest>. Set base_url via --base-url / $KBENCH_ASSETS_URL at fetch time, and upload the tarballs from make-assets --out to that host."

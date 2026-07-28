@@ -150,8 +150,15 @@ def run_score(args):
 ASSET_TIERS = {
     "mini": {"dest": "results", "globs": ["v77app_P_none_forget_seed*.jsonl", "v77app_P_none_retain_seed*.jsonl"],
              "contents": "substrate-P `none` baseline cells (score a P candidate)"},
-    "full": {"dest": "results", "globs": ["v77app_*_none_*_seed*.jsonl"],
-             "contents": "all-substrate `none` baseline cells (score any candidate)"},
+    # One glob per run family. The families differ because the cells were collected in
+    # separate campaigns, so a single wildcard cannot reach them all.
+    "full": {"dest": "results",
+             "globs": ["v77app_*_none_*_seed*.jsonl",            # Llama on all four substrates, plus P for Mistral and Qwen
+                       "v77qwen_C_none_*_seed*.jsonl",           # Qwen, context
+                       "v77xr_mistral_R-*_none_*_seed*.jsonl",   # Mistral, both retrieval substrates
+                       "v85c_mistral_C_none_*_seed*.jsonl",      # Mistral, context
+                       "v85xr_qwen_R-*_none_*_seed*.jsonl"],     # Qwen, both retrieval substrates
+             "contents": "`none` baseline cells for every (substrate, base model) pair reported in the paper"},
 }
 
 
