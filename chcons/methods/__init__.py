@@ -193,7 +193,16 @@ def get_intervention(name: str) -> UnlearnIntervention:
     if name == "rlace":
         from chcons.methods.rlace_adapter import RLACEIntervention
         return RLACEIntervention()
+    if name == "uld":
+        from chcons.methods.uld_adapter import ULDIntervention
+        return ULDIntervention()
+    if name == "spul":
+        from chcons.methods.spul_adapter import SPULIntervention
+        return SPULIntervention()
+    if name == "grun":
+        from chcons.methods.grun_adapter import GRUNIntervention
+        return GRUNIntervention()
     raise ValueError(f"unknown intervention: {name!r}")
 
 
-REGISTERED = ("eco", "falcon", "cha", "depn", "o3", "leace", "repe", "mlp_probe", "rlace")
+REGISTERED = ("eco", "falcon", "cha", "depn", "o3", "leace", "repe", "mlp_probe", "rlace", "spul", "uld", "grun")

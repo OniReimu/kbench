@@ -1,0 +1,10 @@
+KBench_PII_retain:
+  handler: QADataset
+  args:
+    hf_args:
+      path: "json"
+      data_files: ${paths.data_dir}/openunlearn/v1_qa_retain.jsonl
+      split: "train"
+    question_key: "question"
+    answer_key: "answer"
+    max_length: 512

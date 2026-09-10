@@ -1,0 +1,25 @@
+{
+  "prefix": "v77app",
+  "base_model": "meta-llama/Llama-3.1-8B-Instruct",
+  "seeds": [
+    0,
+    137,
+    271
+  ],
+  "substrates": [
+    "P",
+    "C",
+    "R-text",
+    "R-struct"
+  ],
+  "evaluation": {
+    "P": {
+      "pii_in_weights": true,
+      "inject_mode": "system_prompt",
+      "lora_path": null,
+      "allow_direct_answer": true,
+      "n_incontext_bios": 50
+    }
+  },
+  "protocol": "1"
+}

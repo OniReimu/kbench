@@ -10,31 +10,25 @@
 # external unlearning libs). Run `reproduce.sh prep` first.
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODEL_LLAMA="meta-llama/Llama-3.1-8B-Instruct"
-MODEL_QWEN="Qwen/Qwen3.5-9B"
+MODEL_QWEN="Qwen/Qwen2.5-7B-Instruct"
 MODEL_MISTRAL="mistralai/Mistral-7B-Instruct-v0.3"
 SEEDS=(0 137 271)
 N=200
 TARGET="${1:-help}"
 
-# 09_k_verdict_v2.py FILE_RE expects canonical substrate tokens (no hyphen):
-# P, C, Rstruct, Rtext. Map the CLI substrate flags onto them.
-canon_sub () {  # substrate-flag -> canonical token used in result filenames
-  case "$1" in
-    R-text)   echo "Rtext" ;;
-    R-struct) echo "Rstruct" ;;
-    *)        echo "$1" ;;     # P, C pass through unchanged
-  esac
+result_tag () {  # substrate method subset seed -> public result filename stem
+  python3 "$SCRIPT_DIR/scripts/reproduction_names.py" "$1" "$2" "$3" "$4"
 }
 
 run_cell () {  # model substrate method
-  # Emits results/llama_<subcanon>_<method>_<subset>_seed<s>.jsonl for BOTH the
+  # Emits results/llama_<substrate>_<method>_<subset>_seed<s>.jsonl for BOTH the
   # forget and retain subsets, matching FILE_RE in scripts/09_k_verdict_v2.py.
   local model="$1" sub="$2" method="$3"
-  local subcanon; subcanon="$(canon_sub "$sub")"
   for subset in forget retain; do
     for s in "${SEEDS[@]}"; do
-      local tag="llama__${method}_${subset}_seed${s}"
+      local tag; tag="$(result_tag "$sub" "$method" "$subset" "$s")"
       uv run python scripts/02_baseline_leakage.py \
         --model "$model" --substrate "$sub" --unlearn "$method" \
         --query-subset "$subset" --n-sample "$N" --seed "$s" \
@@ -44,11 +38,20 @@ run_cell () {  # model substrate method
   done
 }
 
+# Tests source the exact public naming function without running a target.
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+  return 0
+fi
+
 case "$TARGET" in
   smoke)      # 30-second CPU-only showcase — no model, no credentials, no heavy env.
-              # Runs in an isolated env with only numpy (the scorer's sole non-stdlib
-              # dep), so it skips the full torch/transformers/faiss build.
-    uv run --no-project --with numpy python scripts/smoke_report.py
+              # Reuse an installed numpy when available; otherwise fetch only numpy in
+              # an isolated uv env, skipping the torch/transformers/faiss build.
+    if python3 -c "import numpy" >/dev/null 2>&1; then
+      python3 scripts/smoke_report.py --scorer-version v1
+    else
+      uv run --no-project --with numpy python scripts/smoke_report.py --scorer-version v1
+    fi
     ;;
   prep)       # one-time prerequisites — see INSTALL.md for the full manual steps
     echo ">> [prep] build the production Wiki RAG index (HPC GPU, ~hours)"
@@ -85,30 +88,30 @@ case "$TARGET" in
     echo "   The two LoRA trains need a GPU and a base-model download, so they are"
     echo "   printed as commands rather than auto-run."
     ;;
-  topology)   # Fig. 2 — baseline leak topology, Llama, all substrates
+  topology)   # baseline leak-topology table, Llama, all substrates
     for sub in P C R-text R-struct; do run_cell "$MODEL_LLAMA" "$sub" none; done
-    uv run python scripts/09_k_verdict_v2.py --results-dir results --out docs/verdict_topology.md
+    uv run python scripts/09_k_verdict_v2.py --scorer-version v1 --results-dir results --out docs/verdict_topology.md
     ;;
-  interfaces) # Table 4 — five-interface comparison on Llama P
+  interfaces) # five-interface comparison on Llama P (tab:benchmark_compare)
     echo ">> agentic K-Bench on weight-based checkpoints"
     for unl in none eco star leace cha o3; do run_cell "$MODEL_LLAMA" P "$unl"; done
-    uv run python scripts/09_k_verdict_v2.py --results-dir results --out docs/verdict_interfaces.md
+    uv run python scripts/09_k_verdict_v2.py --scorer-version v1 --results-dir results --out docs/verdict_interfaces.md
     echo ">> headline K-Score leaderboard (ECO reference vs the five defenses; App. table)"
-    uv run python scripts/kscore.py P llama
+    uv run python scripts/kscore.py P llama --scorer-version v1
     echo ">> faithful TOFU / MUSE / WMDP probes (see scripts 21/22/24)"
     echo "   run: scripts/21_tofu_faithful.py, 22_muse_faithful.py, 24_wmdp_mcq.py per checkpoint"
     echo "   then: scripts/23_aggregate_benchmark.py (merges the probe shards into the table;"
     echo "   needs the faithful_{tofu,muse}_* shards from the probes above)"
     ;;
-  substrate)  # Table 2 — substrate blindness across families
+  substrate)  # substrate blindness across families (tab:substrate_blindness)
     # Only the Llama cells use the llama_ naming that 09_k_verdict_v2.py discovers.
     # The cross-model rows (Qwen / Mistral) are scored by kscore_crossmodel.py against per-arch baselines
-    # (qwen_P_none / mistral_P_none) — the llama-only
-    # FILE_RE in 09_k_verdict_v2.py is single-model by design (its nested
+    # (v77app_P_none_qwen / v77app_P_none_mistral). FILE_RE in
+    # 09_k_verdict_v2.py is single-model by design (its nested
     # substrate/method/seed dict has no model axis), so those families are
     # aggregated independently. See docs/COMPUTE.md ("Cross-model block").
     for sub in C R-text R-struct; do run_cell "$MODEL_LLAMA" "$sub" none; done
-    uv run python scripts/09_k_verdict_v2.py --results-dir results --out docs/verdict_substrate.md
+    uv run python scripts/09_k_verdict_v2.py --scorer-version v1 --results-dir results --out docs/verdict_substrate.md
     echo ">> cross-model rows (Qwen / Mistral) — emit under their own prefixes"
     echo "   and aggregate separately; see docs/COMPUTE.md (Cross-model block)."
     for model in "$MODEL_QWEN" "$MODEL_MISTRAL"; do
@@ -119,7 +122,8 @@ case "$TARGET" in
     ;;
   all)
     bash "$0" topology; bash "$0" interfaces; bash "$0" substrate
-    echo ">> full matrix done; see docs/COMPUTE.md (~500 GPU-h)"
+    echo ">> released Llama targets done; cross-model and faithful-probe commands"
+    echo "   printed above remain separate (full paper study: ~500 GPU-h; see docs/COMPUTE.md)"
     ;;
   *)
     echo "Usage: bash reproduce.sh {smoke|prep|topology|interfaces|substrate|all}"; exit 1

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import os
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import requests
 
@@ -56,13 +56,27 @@ class OpenRouterReActAgent(ReActAgent):
     """ReAct agent whose generation is served by an OpenRouter model."""
     api_model: str = "meta-llama/llama-3.1-8b-instruct"  # set per run
     request_timeout: int = 90
-    max_retries: int = 4
+    max_retries: int = 8
+    reasoning_effort: str | None = None
 
     def __post_init__(self):
+        self.api_incidents = []
+        self.api_retries = []
+        self.api_reasoning = []
         key = os.environ.get("OPENROUTER_API_KEY")
         if not key:
             raise RuntimeError("OPENROUTER_API_KEY not set")
         self._headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+
+    def run(self, question: str):
+        self.api_incidents = []
+        self.api_retries = []
+        self.api_reasoning = []
+        trace = super().run(question)
+        trace.api_incidents = self.api_incidents
+        trace.api_retries = self.api_retries
+        trace.api_reasoning = self.api_reasoning
+        return trace
 
     # --- helpers -----------------------------------------------------------
     def _decode_prompt(self, prompt: str) -> list[dict]:
@@ -82,7 +96,40 @@ class OpenRouterReActAgent(ReActAgent):
             msgs.append({"role": "assistant", "content": cont})
         return msgs
 
-    def _chat(self, messages, max_new_tokens, stop=None) -> str:
+    @staticmethod
+    def _reasoning_text(message: dict) -> str:
+        reasoning = message.get("reasoning")
+        if isinstance(reasoning, str) and reasoning.strip():
+            return reasoning
+        details = message.get("reasoning_details")
+        if not isinstance(details, list):
+            return ""
+        joined = "".join(
+            detail["text"]
+            for detail in details
+            if isinstance(detail, dict)
+            and isinstance(detail.get("text"), str)
+            and detail["text"].strip()
+        )
+        return joined if joined.strip() else ""
+
+    def _capture_reasoning(self, message: dict, call_site: str) -> str:
+        reasoning_text = self._reasoning_text(message)
+        if reasoning_text:
+            self.api_reasoning.append({"call_site": call_site, "text": reasoning_text})
+        return reasoning_text
+
+    @staticmethod
+    def _retry_delay(attempt: int, retry_after: str | None = None) -> float:
+        delay = min(60, 5 * 2 ** attempt)
+        if retry_after is not None:
+            try:
+                delay = max(delay, float(retry_after))
+            except ValueError:
+                pass
+        return min(120, delay)
+
+    def _chat(self, messages, max_new_tokens, stop=None, call_site="step") -> str:
         body = {
             "model": self.api_model,
             "messages": messages,
@@ -90,20 +137,114 @@ class OpenRouterReActAgent(ReActAgent):
             "temperature": 0.0,
             "top_p": 1.0,
         }
+        if self.reasoning_effort is not None:
+            body["reasoning"] = {"effort": self.reasoning_effort}
         if stop:
             body["stop"] = stop
         last_err = None
+        empty_completion_retry_used = False
         for attempt in range(self.max_retries):
+            response = None
+            retry_after = None
             try:
-                r = requests.post(OPENROUTER_URL, headers=self._headers, json=body,
-                                  timeout=self.request_timeout)
-                if r.status_code == 429 or r.status_code >= 500:
-                    raise requests.HTTPError(f"{r.status_code}: {r.text[:200]}")
-                r.raise_for_status()
-                return r.json()["choices"][0]["message"]["content"] or ""
+                response = requests.post(OPENROUTER_URL, headers=self._headers, json=body,
+                                         timeout=self.request_timeout)
+                if response.status_code == 429 or response.status_code >= 500:
+                    retry_after = response.headers.get("Retry-After")
+                    raise requests.HTTPError(
+                        f"{response.status_code}: {response.text[:200]}"
+                    )
+                response.raise_for_status()
+                response_body = response.json()
+                choice = response_body["choices"][0]
+                message = choice.get("message") or {}
+                content = message.get("content")
+                reasoning_text = self._capture_reasoning(message, call_site)
+                if not content or not content.strip():
+                    usage = response_body.get("usage") or {}
+                    completion_details = usage.get("completion_tokens_details") or {}
+                    finish_reason = choice.get("finish_reason")
+                    reasoning_tokens = completion_details.get("reasoning_tokens")
+                    if (
+                        not empty_completion_retry_used
+                        and finish_reason == "stop"
+                        and not reasoning_text
+                    ):
+                        empty_completion_retry_used = True
+                        retry_record = {
+                            "call_site": call_site,
+                            "finish_reason": finish_reason,
+                            "completion_tokens": usage.get("completion_tokens"),
+                            "reasoning_tokens": reasoning_tokens,
+                        }
+                        retry_r = requests.post(
+                            OPENROUTER_URL,
+                            headers=self._headers,
+                            json=body,
+                            timeout=self.request_timeout,
+                        )
+                        response = retry_r
+                        if retry_r.status_code == 429 or retry_r.status_code >= 500:
+                            retry_after = retry_r.headers.get("Retry-After")
+                            raise requests.HTTPError(
+                                f"{retry_r.status_code}: {retry_r.text[:200]}"
+                            )
+                        retry_r.raise_for_status()
+                        retry_response = retry_r.json()
+                        retry_choice = retry_response["choices"][0]
+                        retry_message = retry_choice.get("message") or {}
+                        retry_content = retry_message.get("content")
+                        retry_reasoning_text = self._capture_reasoning(
+                            retry_message, call_site
+                        )
+                        if retry_content and retry_content.strip():
+                            retry_record["recovered"] = True
+                            self.api_retries.append(retry_record)
+                            return retry_content
+
+                        retry_usage = retry_response.get("usage") or {}
+                        retry_completion_details = (
+                            retry_usage.get("completion_tokens_details") or {}
+                        )
+                        self.api_incidents.append({
+                            "call_site": call_site,
+                            "finish_reason": retry_choice.get("finish_reason"),
+                            "native_finish_reason": retry_choice.get("native_finish_reason"),
+                            "completion_tokens": retry_usage.get("completion_tokens"),
+                            "reasoning_tokens": retry_completion_details.get("reasoning_tokens"),
+                            "had_refusal": bool(retry_message.get("refusal")),
+                            "content_was_null": retry_content is None,
+                            "reasoning_present": bool(retry_reasoning_text),
+                            "retried": True,
+                        })
+                        retry_record["recovered"] = False
+                        self.api_retries.append(retry_record)
+                        return ""
+
+                    self.api_incidents.append({
+                        "call_site": call_site,
+                        "finish_reason": finish_reason,
+                        "native_finish_reason": choice.get("native_finish_reason"),
+                        "completion_tokens": usage.get("completion_tokens"),
+                        "reasoning_tokens": reasoning_tokens,
+                        "had_refusal": bool(message.get("refusal")),
+                        "content_was_null": content is None,
+                        "reasoning_present": bool(reasoning_text),
+                    })
+                    return ""
+                return content
+            except requests.HTTPError as e:
+                if (
+                    response is not None
+                    and 400 <= response.status_code < 500
+                    and response.status_code != 429
+                ):
+                    raise
+                last_err = e
+                time.sleep(self._retry_delay(attempt, retry_after))
             except Exception as e:  # noqa: BLE001 — retry transient API errors
                 last_err = e
-                time.sleep(2 ** attempt)
+                time.sleep(self._retry_delay(attempt))
         raise RuntimeError(f"OpenRouter call failed after {self.max_retries} tries: {last_err}")
 
     # --- the two overridden backend methods --------------------------------
@@ -111,7 +252,12 @@ class OpenRouterReActAgent(ReActAgent):
         """API equivalent of the local ReAct generation step. Mirrors the local
         truncation by using `\\nObservation:` as a stop sequence."""
         messages = self._decode_prompt(prompt_text)
-        text = self._chat(messages, self.max_new_tokens, stop=["\nObservation:", "Observation:"])
+        text = self._chat(
+            messages,
+            self.max_new_tokens,
+            stop=["\nObservation:", "Observation:"],
+            call_site="step",
+        )
         # Local path strips from the first hallucinated Observation onward; the stop
         # sequence handles that, but trim defensively.
         for marker in ("\nObservation:", "Observation:"):
@@ -130,7 +276,7 @@ class OpenRouterReActAgent(ReActAgent):
                 f"just provide whatever you have."
             ),
         }]
-        return self._chat(messages, max_new_tokens).strip()
+        return self._chat(messages, max_new_tokens, call_site="summary").strip()
 
 
 def load_api_react_agent(

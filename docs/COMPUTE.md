@@ -29,7 +29,7 @@ faithful TOFU/MUSE/WMDP probes.
 
 The base stack is pinned in `pyproject.toml` (`uv sync`); the Llama-3.1-8B and
 Qwen3.5-9B experiments run in this main environment. One additional pinned
-requirement file ships for the Mistral-7B-Instruct-v0.3 stack, whose transformers version
+requirement file ships for the Mistral-7B-v0.3 stack, whose transformers version
 diverges: `cross_model_pinned_requirements.txt` (transformers 4.51.3). Build it as
 a separate venv (e.g. `uv venv .venv-mistral` then `uv pip install -r
 cross_model_pinned_requirements.txt`); do not install it into the main project
@@ -40,12 +40,13 @@ isolated environment.
 
 ## Cross-model block (`reproduce.sh substrate`)
 
-Only the Llama rows in the substrate block are emitted under the `llama_` naming
-that `scripts/09_k_verdict_v2.py` discovers (its `FILE_RE` / aggregation are
+Only the Llama rows in the substrate block are emitted under the public `llama_` naming
+that `scripts/09_k_verdict_v2.py` discovers (the legacy `v77app_` alias is also
+accepted; its `FILE_RE` / aggregation are
 single-model by design — the nested substrate/method/seed dict has no model
 axis). The cross-model rows (Qwen / Mistral) are scored under separate per-family
 prefixes and aggregated independently per family; the `substrate` target prints the
-commands rather than pooling them into the llama verdict. Run Mistral in its pinned
+commands rather than pooling them into the v77app verdict. Run Mistral in its pinned
 venv above and Qwen in the main environment.
 
 ## Wall-clock guidance for `reproduce.sh`
@@ -53,7 +54,11 @@ venv above and Qwen in the main environment.
 | Target | Scope | Approx. GPU-h |
 |--------|-------|--------------|
 | `prep` | RAG index build + PII gen/inject (one-time) | ~hours (index dominates) |
-| `topology` | Llama P baseline | < 1 |
-| `interfaces` | Table 4 (five-interface comparison, Llama P) | ~6 |
-| `substrate` | Table 5 (beyond-weight panel, Llama C/R; cross-model rows separate) | ~8 |
-| `all` | full matrix | ~500 |
+| `topology` | Llama baseline on P, C, R-text, and R-struct | ~4 |
+| `interfaces` | Five-interface comparison table (Llama P) | ~6 |
+| `substrate` | Weight-probe versus agentic-observer table (Llama C/R; cross-model rows separate) | ~8 |
+| `all` | released Llama targets above; cross-model and faithful probes remain separate | ~18 after `prep` |
+
+The approximately 500 GPU-hour total at the top of this page is the complete paper
+study, including the cross-model and faithful-probe jobs that `reproduce.sh` prints
+but does not launch automatically.

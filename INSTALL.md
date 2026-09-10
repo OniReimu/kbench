@@ -39,9 +39,19 @@ index; `data/wiki_index_smoke/` ships complete (passages + `index.faiss`) for a
 quick CPU smoke run. It is built with `BAAI/bge-small-en-v1.5`, so pass
 `--embed-model BAAI/bge-small-en-v1.5` when pointing the agent at it (the agent
 default is `bge-base`, whose 768-dim vectors would not match this 384-dim index).
-Then build the two
-v2.1 substrate-isolation indexes (inject the PII into the wiki corpus, with the
-target absent from the distractor index and present in the target-in index):
+For evaluation with the fixed v2.1 assets, download the two production indexes
+(about 8.4 GB each):
+
+```bash
+kbench fetch-assets --indexes
+```
+
+They are written to `data/wiki_index_v21_target_in/` and
+`data/wiki_index_v21_distractor/`, the default paths read by `kbench eval`. In an
+installed, non-repository invocation, run the command from the directory where you
+will run `kbench eval`. To rebuild the two substrate-isolation indexes instead
+(injecting the PII into the wiki corpus, with the target absent from the distractor
+index and present in the target-in index):
 ```bash
 uv run python scripts/00b_inject_pii_corpus.py \
   --orig-passages data/wiki_index/passages.jsonl --orig-embeddings-dir data/wiki_index/embeddings \
@@ -51,21 +61,53 @@ uv run python scripts/00b_inject_pii_corpus.py \
   --facts data/pii_facts/v1_facts.jsonl --n-forget 5000 --out-dir data/wiki_index_v21_target_in/
 ```
 
-## 3. PII LoRA + merged target (GPU; substrate P and the C/R distractor LoRA)
-Train the target LoRA (memorizes the synthetic PII) and the distractor-only
-LoRA-D (used by the C / R-text / R-struct cells), then merge the target:
+## 3. PII LoRA + merged target (substrate P)
+
+For a paper-comparable substrate-P run, start from the injected target adapter
+published as a v1.0 release asset on the Hugging Face dataset
+`kbench/kbench-assets`:
+
+```bash
+kbench fetch-assets --target
+```
+
+The roughly 336 MB adapter is written to
+`models/Llama-3.1-8B-kbench-target-adapter/` and is distributed under the Llama
+3.1 Community License. It targets
+`meta-llama/Llama-3.1-8B-Instruct` snapshot
+`0e9e39f249a16976918f6564b8830bc894c89659`; its
+`adapter_model.safetensors` SHA-256 is
+`185217937208be1398ba575ea9b0d95b44a107483e083f79497306a62ff60417`.
+The exact fp32-CPU merge procedure is in the README. The merged target is the
+starting checkpoint for weight-based unlearning, including the
+[OpenUnlearning NPO recipe](docs/OPENUNLEARNING.md).
+
+To build a new, non-reference target instead, train and merge a LoRA locally:
+
 ```bash
 uv run python scripts/03_inject_pii.py --facts data/pii_facts/v1_facts.jsonl \
   --out-dir models/lora_v1 --epochs 5 --r 32 --alpha 64 --seed 0
-uv run python scripts/03_inject_pii.py --facts data/v21/bios_distractor.jsonl \
-  --out-dir models/v21_lora_d --epochs 5 --r 32 --alpha 64 --seed 0
 uv run python scripts/20_merge_target.py        # -> models/target_merged
 ```
-`models/target_merged` is the substrate-P target (PII baked into weights) that
-the weight-based methods unlearn from; `models/v21_lora_d/final_adapter` is the
-always-loaded distractor LoRA for the context and retrieval substrates.
 
-## 4. External unlearning libraries
+That locally trained target is useful for development but is not the fixed
+paper target unless its adapter identity matches the published asset.
+
+## 4. Method availability and external libraries
+
+The **9 available adapter short names** are `eco`, `cha`, `depn`, `o3`, `leace`,
+`repe`, `mlp_probe`, `rlace`, and `uld`. They are accepted by the evaluator,
+construct through `get_intervention`, and have no recorded failing conformance
+result. A trained artifact is still required where the method's setup demands
+one (for example, `ULD_ASSISTANT_PATH` for `uld`).
+
+`falcon`, `spul`, and `grun` remain registered experimental ports and are not
+counted as available. FALCON's harness-owned SophiaG optimizer has no upstream
+reference; SPUL replaces an upstream sentiment-only dataset builder; GRUN still
+needs an activation-space conformance harness. `spul` and `grun` therefore remain
+registered-but-rejected by the low-level evaluator instead of silently appearing
+as runnable short names.
+
 Third-party method code is **not** redistributed (license + size). Clone each
 into `external/<dir>` before running that method — the adapters fail loudly
 (`require_external`) when the path is missing:
@@ -77,14 +119,17 @@ into `external/<dir>` before running that method — the adapters fail loudly
 | DEPN   | `depn`         |
 | O3     | `o3-gao`       |
 | LEACE  | `leace`        |
-| FALCON | `falcon`       |
 
 Pin the upstream commit you use; record it in your run notes.
+
+The experimental FALCON adapter file is retained for auditability. If you work on
+that port, its checkout belongs at `external/falcon`, but it is not an available
+release method until complete conformance evidence exists.
 
 ## Run
 ```bash
 bash reproduce.sh prep         # steps 1-2 (and prints the step 3-4 manual notes)
-bash reproduce.sh topology     # Fig. 2  (baseline leak topology, Llama)
-bash reproduce.sh interfaces   # Table 4 (five-interface comparison, Llama P)
-bash reproduce.sh substrate    # Table 5 (beyond-weight panel, Llama; cross-model: see docs/COMPUTE.md)
+bash reproduce.sh topology     # baseline leak-topology diagnostic, Llama
+bash reproduce.sh interfaces   # five-interface comparison, Llama P (tab:benchmark_compare)
+bash reproduce.sh substrate    # beyond-weight panel, Llama (tab:substrate_blindness; cross-model: see docs/COMPUTE.md)
 ```

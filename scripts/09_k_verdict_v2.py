@@ -1,6 +1,7 @@
 """K-Bench v2.1 verdict — full spec §4 metric stack.
 
-Reads results/<model>_<substrate>_<method>_<subset>_seed<s>.jsonl files and computes:
+Reads public results/llama_<substrate>_<method>_<subset>_seed<s>.jsonl files (and
+the legacy v77app_ alias) and computes:
 - per-channel CER + bootstrap 95% CI
 - OR(all) per cell with halt-gating
 - topology vector (normalized channel share) per cell
@@ -39,8 +40,8 @@ import numpy as np
 CHANNELS = ("Z_CoT", "Z_tool", "Z_tool_wide", "Z_RAG", "Z_answer", "Z_summary")
 
 # Spec §2.4 eligibility.
-SUBSTRATES = ("P", "C", "Rstruct", "Rtext")
-SUBSTRATE_DISPLAY = {"P": "P", "C": "C", "Rstruct": "R-struct", "Rtext": "R-text"}
+SUBSTRATES = ("P", "C", "R-struct", "R-text")
+SUBSTRATE_DISPLAY = {substrate: substrate for substrate in SUBSTRATES}
 PORTABLE_METHODS = ("eco", "star", "leace")
 P_ONLY_METHODS = ("cha", "o3")
 CONTROL_METHODS = ("noise",)
@@ -48,7 +49,8 @@ BASELINE_METHOD = "none"
 SEEDS = (0, 137, 271)
 
 FILE_RE = re.compile(
-    r"^(?P<model>llama|qwen|mistral|llama-lora)_(?P<substrate>P|C|R-struct|R-text)_(?P<method>[\w-]+?)_(?P<subset>forget|retain)_seed(?P<seed>\d+)\.jsonl$"
+    r"^(?P<prefix>llama|v77app)_(?P<substrate>P|C|R-struct|R-text)_"
+    r"(?P<method>\w+?)_(?P<subset>forget|retain)_seed(?P<seed>\d+)\.jsonl$"
 )
 
 
@@ -232,21 +234,24 @@ def paired_mcnemar(base: dict[str, dict], intervention: dict[str, dict],
 
 
 def discover_cells(results_dir: Path) -> dict:
-    """Discover all baseline and method cells. Returns nested dict[substrate][method][subset][seed] = {path,cell}."""
+    """Discover public llama cells plus the legacy v77app alias."""
     cells: dict = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
-    for jsonl in sorted(results_dir.glob("*.jsonl")):
+    paths = sorted((*results_dir.glob("llama_*.jsonl"), *results_dir.glob("v77app_*.jsonl")))
+    for jsonl in paths:
         m = FILE_RE.match(jsonl.name)
         if not m:
             continue
         if m["method"] == "ablation":
             continue  # ablation cells handled separately (different schema)
-        # Ablation track uses "<model>_ablation_<substrate>_..." which won't match
-        # since FILE_RE expects substrate immediately after the model token. Defensive.
+        # Ablation tracks put "ablation" before the substrate and do not match.
         sub = m["substrate"]
         method = m["method"]
         subset = m["subset"]
         seed = int(m["seed"])
-        cells[sub][method][subset][seed] = {"path": jsonl}
+        existing = cells[sub][method][subset].get(seed)
+        # Prefer the public spelling when both aliases exist in an old mixed tree.
+        if existing is None or m["prefix"] == "llama":
+            cells[sub][method][subset][seed] = {"path": jsonl}
     return cells
 
 
@@ -699,6 +704,8 @@ def render_report(cells: dict, tau: float, d_within: dict, cross_d: dict,
 
 def main() -> None:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--scorer-version", choices=("v1",), default="v1",
+                    help="published scorer semantics (the verdict path is pinned to v1)")
     ap.add_argument("--results-dir", default="results", type=Path)
     ap.add_argument("--out", default=None, type=Path,
                     help="Markdown output path. If omitted, prints to stdout.")

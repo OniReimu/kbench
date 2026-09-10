@@ -1,0 +1,8 @@
+.git
+.venv*
+**/__pycache__
+**/*.pyc
+.pytest_cache
+**/*.egg-info
+results/*
+!results/v77app.reference.json

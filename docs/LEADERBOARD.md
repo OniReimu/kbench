@@ -7,20 +7,30 @@ flagged, not ranked first.
 ## Getting the reference assets (first run)
 
 Scoring needs the fixed **`none` baseline** cells, which K-Bench does not ship in-repo
-(~17 MB, hosted). Fetch them once:
+(about 8 MB for the full compressed bundle). The target adapter and the two retrieval
+indexes are also published as v1.0 release assets on the Hugging Face dataset
+`kbench/kbench-assets`. Fetch the tiers you need with:
 
 ```bash
-export KBENCH_ASSETS_URL=<RELEASE_ASSET_HOST>     # see the repo's Releases page
-kbench fetch-assets --full                        # all-substrate `none` baseline -> results/
-# or: kbench fetch-assets --mini                  # substrate-P baseline only (~3.5 MB)
+kbench fetch-assets --full  # all-substrate `none` baseline -> results/
+# or: kbench fetch-assets --mini  # substrate-P baseline only (about 0.4 MB)
+kbench fetch-assets --target   # about 336 MB -> models/Llama-3.1-8B-kbench-target-adapter/
+kbench fetch-assets --indexes  # about 8.4 GB each -> data/wiki_index_v21_{target_in,distractor}/
 ```
 
-Then `kbench score` / `kbench eval` compute your K-Score against that baseline. A
-**weight-based method on substrate P** additionally needs K-Bench's PII-injected target
-model (so the forget PII was present before unlearning) plus the retrieval indexes for
-R substrates; these are larger, separately-hosted downloads at the same
-`KBENCH_ASSETS_URL` (`fetch-assets` pulls the baseline cells only). The C substrate and
-any API-served model need only the baseline cells above.
+These flags are additive, so `kbench fetch-assets --full --target --indexes` fetches
+all tiers. With no flag, only the mini baseline is fetched. For an installed CLI,
+run the fetch from the directory where you will run eval; the indexes then land at
+the evaluator's default `data/...` paths. The target adapter is distributed under
+the Llama 3.1 Community License.
+
+After fetching, `kbench score` / `kbench eval` compute your K-Score
+against that baseline. The reference prefix and base identity are inferred by default.
+Optional `--prefix` and `--base` overrides are checked against the reference metadata
+and scoring stops if they disagree. A **weight-based method on substrate P** additionally needs K-Bench's
+PII-injected target model (so the forget PII was present before unlearning). R-text and
+R-struct need the two retrieval indexes, about 8.4 GB each. A C-only API run needs only
+credentials and the bundled public data.
 
 ## What you submit
 

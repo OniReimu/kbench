@@ -1,0 +1,20 @@
+{
+  "unlearn": "none",
+  "lora_path": "models/lora_v1/final_adapter",
+  "model": "smoke",
+  "api_model": null,
+  "n_sample": 8,
+  "query_subset": "forget",
+  "seed": 0,
+  "scratchpad_only": false,
+  "star_disable_secure_prefix": false,
+  "star_disable_soft": false,
+  "star_disable_tasl": false,
+  "substrate": "P",
+  "index_dir": "data/wiki_index_v21_distractor",
+  "agent_db_path": "data/v21/bios_distractor.jsonl",
+  "inject_mode": "system_prompt",
+  "query_incontext_only": false,
+  "n_incontext_bios": 50,
+  "allow_direct_answer": true
+}

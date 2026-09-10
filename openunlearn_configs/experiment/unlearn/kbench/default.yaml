@@ -1,0 +1,48 @@
+# @package _global_
+# K-Bench PII forget-tuning experiment on Llama-3.1-8B-Instruct.
+# KBENCH_INJECTED_TARGET must name the merged K-Bench target, never the bare base.
+# Method swappable via Hydra override at submission time:
+#   trainer=GradAscent  → GA
+#   trainer=GradDiff    → GD (retain_loss_type=NLL default)
+#   trainer=NPO         → NPO (retain_loss_type=NLL default)
+#   trainer=NPO  trainer.method_args.retain_loss_type=KL  → NPO+KL
+#   trainer=DPO + override data.forget → KBench_PII_forget_idk → IDK
+defaults:
+  - override /model: Llama-3.1-8B-Instruct
+  - override /trainer: GradAscent
+  - override /data: unlearn
+  - override /data/datasets@data.forget: KBench_PII_forget
+  - override /data/datasets@data.retain: KBench_PII_retain
+  # K-Bench evaluation happens outside OpenUnlearning.
+  - override /eval: null
+
+model:
+  model_args:
+    pretrained_model_name_or_path: ${oc.env:KBENCH_INJECTED_TARGET}
+  tokenizer_args:
+    pretrained_model_name_or_path: ${oc.env:KBENCH_INJECTED_TARGET}
+
+# K-Bench uses a 20% forget / 80% retain split. These labels document the
+# experiment and are not OpenUnlearning dataset selectors.
+forget_split: kbench_pii_20pct
+retain_split: kbench_pii_80pct
+
+data:
+  anchor: forget
+  forget:
+    KBench_PII_forget:
+      args: {}
+  retain:
+    KBench_PII_retain:
+      args: {}
+
+trainer:
+  args:
+    warmup_epochs: 1.0
+    learning_rate: 1e-5
+    weight_decay: 0.01
+    num_train_epochs: 5
+    save_strategy: 'no'
+    save_only_model: true
+
+task_name: ???

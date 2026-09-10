@@ -14,12 +14,15 @@ benchmark: a single-answer probe reads "forgotten" while OR(all) is unchanged.
 """
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import math
+import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 CELLS = HERE.parent / "data" / "smoke" / "cells"
+sys.path.insert(0, str(HERE.parent))
 
 # Load the canonical verdict module by path (its filename starts with a digit).
 _spec = importlib.util.spec_from_file_location("kverdict", HERE / "09_k_verdict_v2.py")
@@ -92,14 +95,17 @@ def report(method: str) -> None:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--scorer-version", choices=("v1",), default="v1")
+    parser.parse_args()
     print("K-Bench smoke — scoring path on a bundled fixture "
           "(CPU-only, no model, no download)")
     print(f"Fixture: {CELLS.relative_to(HERE.parent)} (substrate P, 1 seed, "
           "8 queries) — DEMONSTRATION ONLY")
     report("demo")
     print("\nThis is the scoring half of the harness. To score a real method:")
-    print("  kbench eval --model <ckpt> --name MyMethod        # GPU")
-    print("  kbench score --cells <dir> --name MyMethod        # offline transcripts")
+    print("  kbench eval  --model <ckpt> --name MyMethod   # GPU")
+    print("  kbench score --cells <dir> --name MyMethod   # offline transcripts")
     return 0
 
 

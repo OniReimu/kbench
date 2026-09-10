@@ -3,7 +3,8 @@
 Copy this file, fill in the two required methods (`name`, `setup`) plus whichever
 optional hooks your method needs, and run WITHOUT editing the K-Bench repo:
 
-    kbench eval --model <base> --method /path/to/my_adapter.py --name MyMethod
+    kbench eval --model meta-llama/Llama-3.1-8B-Instruct \
+        --method /path/to/my_adapter.py --name MyMethod
 
 If your file defines more than one UnlearnIntervention subclass, disambiguate:
 

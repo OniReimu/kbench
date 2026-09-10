@@ -70,6 +70,7 @@ One command runs every applicable substrate and writes the leaderboard row:
 
 ```bash
 kbench eval --model meta-llama/Llama-3.1-8B-Instruct \
+    --base meta-llama/Llama-3.1-8B-Instruct --prefix v77app \
     --method /path/to/mymethod_adapter.py --name MyMethod
 #  -> results/MyMethod.kbench.json  (K-Score, OR_forget, Δsel, degen, per-channel severity)
 ```

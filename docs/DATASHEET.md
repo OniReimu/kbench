@@ -18,7 +18,8 @@ is injected (weights vs. context vs. retrieval).
   with [Python Faker](https://faker.readthedocs.io/). Any resemblance to a real
   person is coincidental.
 - **Retrieval distractor corpus.** The retrieval substrate's document store
-  (`data/wiki_index*`) ships real public-domain Wikipedia passages, used as a
+  (`data/wiki_index*`) holds real Wikipedia passages from the Hugging Face `wikimedia/wikipedia`
+  dataset, which keep that dataset's licenses (CC BY-SA 3.0 and GFDL). They serve as a
   realistic distractor around the injected synthetic PII. Only the injected PII is
   synthetic; the surrounding corpus is intentionally real so retrieval behaves as it
   would in deployment.

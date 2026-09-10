@@ -1,5 +1,5 @@
 """Cross-model K-Score: same metric as kscore.py but baseline = none_<arch>.
-Usage: kscore_crossmodel.py <arch=mistral|qwen> <prefix=llama> [methods_csv]"""
+Usage: kscore_crossmodel.py <arch=mistral|qwen> <prefix=v77app> [methods_csv]"""
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 from kscore import load, cell_metrics, SUBSTRATE_BROKEN_OR, SUBSTRATE_BROKEN_COH, SEEDS
@@ -15,7 +15,7 @@ def cell(method, split, prefix):
 
 def main():
     arch = sys.argv[1]
-    prefix = sys.argv[2] if len(sys.argv) > 2 else "llama"
+    prefix = sys.argv[2] if len(sys.argv) > 2 else "v77app"
     methods = sys.argv[3].split(",") if len(sys.argv) > 3 else ["SimNPO","SatImp","WGA","UNDIAL","SOUL"]
     bf = cell("none_%s" % arch, "forget", prefix)
     br = cell("none_%s" % arch, "retain", prefix)
@@ -30,8 +30,8 @@ def main():
     base_coh = bf["chan_sev"].get("Z_answer", 0.0)
     if base_coh < SUBSTRATE_BROKEN_COH:
         print("# Cross-model K-Score -- %s substrate P (%s)" % (arch, prefix))
-        print("# SUBSTRATE-BROKEN: baseline none_%s answer-channel coherence %.3f < %.2f" % (arch, base_coh, SUBSTRATE_BROKEN_COH))
-        print("# no-intervention agent cannot coherently reproduce target PII in its answer; methods NON-RANKABLE.")
+        print("# SUBSTRATE-BROKEN: baseline none_%s mean graded answer-channel severity %.3f < %.2f" % (arch, base_coh, SUBSTRATE_BROKEN_COH))
+        print("# the no-intervention agent surfaces too little of the target PII in its answer; methods NON-RANKABLE.")
         print("# binary OR %.3f leaks only via non-answer channels (e.g. Z_summary %.3f). Reported as broken-substrate, not ranked." % (bf["or_binary"], bf["chan_sev"].get("Z_summary",0.0)))
         return
     print("# Cross-model K-Score -- %s substrate P (%s, baseline none_%s)\n" % (arch, prefix, arch))

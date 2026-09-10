@@ -22,13 +22,26 @@ Run:  PYTHONPATH=src python3 paper/scripts/cer_rederivation_check.py
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 from statistics import mean
 
 from chcons.metrics import field_to_match_variants, _canon
 
-RES = Path(__file__).resolve().parent.parent / "results"  # release layout: <root>/scripts/ -> <root>/results
+
+def _resolve_results_dir() -> Path:
+    env = os.environ.get("KBENCH_RESULTS_DIR")
+    if env:
+        return Path(env)
+    for p in (Path(__file__).resolve().parents[2], Path(__file__).resolve().parents[1]):
+        cand = p / "results"
+        if cand.is_dir() and any(cand.glob("*.jsonl")):
+            return cand
+    return Path(__file__).resolve().parent.parent / "results"
+
+
+RES = _resolve_results_dir()
 SEEDS = [0, 137, 271]
 CHANNELS = ("Z_CoT", "Z_tool", "Z_tool_wide", "Z_RAG", "Z_answer", "Z_summary")
 # channel -> transcript field(s) holding that channel's observation (same map as kscore.py)
@@ -97,42 +110,68 @@ def load_cell(prefix: str, substrate: str, method: str, subset: str) -> list[dic
 
 
 def cell_cer(rows: list[dict]) -> dict[str, dict[str, float]]:
-    """Per-channel CER (halt-gated like 09_k_verdict) + OR(all), under each matcher."""
-    acc = {ch: {"baked": [], "ss": [], "wb": []} for ch in CHANNELS}
-    or_baked, or_ss, or_wb = [], [], []
+    """Per-channel CER (halt-gated and ungated variants) + OR(all), under each matcher."""
+    g_acc = {ch: {"baked": [], "ss": [], "wb": []} for ch in CHANNELS}
+    g_or_baked, g_or_ss, g_or_wb = [], [], []
+    u_acc = {ch: {"baked": [], "ss": [], "wb": []} for ch in CHANNELS}
+    u_or_baked, u_or_ss, u_or_wb = [], [], []
     for r in rows:
         halted = r.get("halted_reason")
         summ_err = r.get("summary_error")
         rec_cer = per_record_cer(r)
-        any_b = any_s = any_w = 0
+        g_any_b = g_any_s = g_any_w = 0
+        u_any_b = u_any_s = u_any_w = 0
         for ch in CHANNELS:
+            b, s, w = rec_cer[ch]
+            u_acc[ch]["baked"].append(b)
+            u_acc[ch]["ss"].append(s)
+            u_acc[ch]["wb"].append(w)
+            u_any_b |= b
+            u_any_s |= s
+            u_any_w |= w
             if ch == "Z_answer" and halted != "final_answer":
                 continue
             if ch == "Z_summary" and summ_err:
                 continue
-            b, s, w = rec_cer[ch]
-            acc[ch]["baked"].append(b)
-            acc[ch]["ss"].append(s)
-            acc[ch]["wb"].append(w)
-            any_b |= b
-            any_s |= s
-            any_w |= w
-        or_baked.append(any_b)
-        or_ss.append(any_s)
-        or_wb.append(any_w)
-    per_ch = {ch: {k: (mean(v) if v else 0.0) for k, v in d.items()} for ch, d in acc.items()}
-    per_ch["OR_all"] = {
-        "baked": mean(or_baked) if or_baked else 0.0,
-        "ss": mean(or_ss) if or_ss else 0.0,
-        "wb": mean(or_wb) if or_wb else 0.0,
+            g_acc[ch]["baked"].append(b)
+            g_acc[ch]["ss"].append(s)
+            g_acc[ch]["wb"].append(w)
+            g_any_b |= b
+            g_any_s |= s
+            g_any_w |= w
+        g_or_baked.append(g_any_b)
+        g_or_ss.append(g_any_s)
+        g_or_wb.append(g_any_w)
+        u_or_baked.append(u_any_b)
+        u_or_ss.append(u_any_s)
+        u_or_wb.append(u_any_w)
+    res = {}
+    for ch in CHANNELS:
+        res[ch] = {
+            "baked": mean(g_acc[ch]["baked"]) if g_acc[ch]["baked"] else 0.0,
+            "ss": mean(g_acc[ch]["ss"]) if g_acc[ch]["ss"] else 0.0,
+            "wb": mean(g_acc[ch]["wb"]) if g_acc[ch]["wb"] else 0.0,
+            "gated_ss": mean(g_acc[ch]["ss"]) if g_acc[ch]["ss"] else 0.0,
+            "gated_wb": mean(g_acc[ch]["wb"]) if g_acc[ch]["wb"] else 0.0,
+            "ungated_ss": mean(u_acc[ch]["ss"]) if u_acc[ch]["ss"] else 0.0,
+            "ungated_wb": mean(u_acc[ch]["wb"]) if u_acc[ch]["wb"] else 0.0,
+        }
+    res["OR_all"] = {
+        "baked": mean(g_or_baked) if g_or_baked else 0.0,
+        "ss": mean(g_or_ss) if g_or_ss else 0.0,
+        "wb": mean(g_or_wb) if g_or_wb else 0.0,
+        "gated_ss": mean(g_or_ss) if g_or_ss else 0.0,
+        "gated_wb": mean(g_or_wb) if g_or_wb else 0.0,
+        "ungated_ss": mean(u_or_ss) if u_or_ss else 0.0,
+        "ungated_wb": mean(u_or_wb) if u_or_wb else 0.0,
     }
-    return per_ch
+    return res
 
 
 # Discover every (prefix, substrate, method, subset) cell actually present on disk, so
-# the impact scan covers ALL locally-available leak cells (not a fixed none/star subset).
+# the impact scan covers all locally-available leak cells.
 _FILE_RE = re.compile(
-    r"^(?P<prefix>llama)"
+    r"^(?P<prefix>v77app|v77bench)"
     r"_(?P<sub>P|C|R-struct|R-text)_(?P<method>.+?)_(?P<subset>forget|retain)_seed\d+\.jsonl$")
 
 
@@ -147,15 +186,18 @@ def discover_cells() -> list[tuple[str, str, str, str]]:
 
 CELLS = discover_cells()
 
-# headline cells the paper quotes: (label, prefix, sub, method, subset, channel, reported)
+# Dropped v53_qwen anchors because the prefix is retired and its replacement is an open judgement call.
+# headline cells the paper quotes: (label, prefix, sub, method, subset, channel, denom, reported)
 HEADLINE = [
-    ("P Z_summary (Llama)",      "llama", "P", "none", "forget", "Z_summary", 0.670),
-    ("C Z_answer (Llama)",       "llama", "C", "none", "forget", "Z_answer", 0.558),
-    ("C OR(all) (Llama)",        "llama", "C", "none", "forget", "OR_all", 0.223),
-    ("R-struct Z_tool_wide",     "llama", "R-struct", "none", "forget", "Z_tool_wide", 0.855),
-    ("R-struct Z_answer",        "llama", "R-struct", "none", "forget", "Z_answer", 0.914),
-    ("R-struct OR(all)",         "llama", "R-struct", "none", "forget", "OR_all", 0.855),
-    ("R-text OR(all)",           "llama", "R-text", "none", "forget", "OR_all", 0.602),
+    ("P Z_summary (Llama)",       "v77app",   "P",        "none", "forget", "Z_summary",   "ungated", 0.670),
+    ("C Z_answer (Llama)",        "v77app",   "C",        "none", "forget", "Z_answer",    "ungated", 0.192),
+    ("C OR(all) (Llama)",         "v77app",   "C",        "none", "forget", "OR_all",      "ungated", 0.223),
+    ("R-struct Z_tool_wide",      "v77app",   "R-struct", "none", "forget", "Z_tool_wide", "ungated", 0.855),
+    ("R-struct Z_answer",         "v77app",   "R-struct", "none", "forget", "Z_answer",    "ungated", 0.832),
+    ("R-struct OR(all)",          "v77app",   "R-struct", "none", "forget", "OR_all",      "ungated", 0.855),
+    ("R-text OR(all)",            "v77app",   "R-text",   "none", "forget", "OR_all",      "ungated", 0.602),
+    ("R-struct Z_tool_wide StaR", "v77bench", "R-struct", "star", "forget", "Z_tool_wide", "ungated", 0.857),
+    ("R-struct Z_answer StaR",    "v77bench", "R-struct", "star", "forget", "Z_answer",    "ungated", 0.463),
 ]
 
 
@@ -163,6 +205,7 @@ def main() -> None:
     # 1) global scan: basis validation + impact
     max_basis = 0.0   # |substring_recompute - baked|
     max_impact = 0.0  # |wordbound - substring|
+    scanned = 0       # cells that actually contributed to the two maxima
     moved_3dp = []    # cells where round(wb,3) != round(ss,3)
     cache = {}
     for prefix, sub, method, subset in CELLS:
@@ -170,6 +213,7 @@ def main() -> None:
         if not rows:
             continue
         pc = cell_cer(rows)
+        scanned += 1
         cache[(prefix, sub, method, subset)] = pc
         for ch, d in pc.items():
             max_basis = max(max_basis, abs(d["ss"] - d["baked"]))
@@ -182,6 +226,13 @@ def main() -> None:
     print("=" * 72)
     print("BINARY-CER RE-DERIVATION CHECK  (substring -> word-boundary)")
     print("=" * 72)
+    if not scanned:
+        # A maximum over nothing is 0.0, which renders as a passing check. Refuse to
+        # print one: the prefixes below matched no transcript, so nothing was validated.
+        print("\n[1] BASIS VALIDATION: NOT RUN, no transcript matched the prefixes "
+              "this check looks for")
+        print("[2] IMPACT: NOT RUN, same reason")
+        raise SystemExit(2)
     print(f"\n[1] BASIS VALIDATION: max |substring-recompute - baked leakage.cer| "
           f"= {max_basis:.5f}")
     print("    (≈0 confirms raw_Z_* reproduces the eval-time basis the paper used)")
@@ -195,22 +246,27 @@ def main() -> None:
     else:
         print("    cells moving at 3-dp (reported precision): NONE")
 
-    print("\n[3] HEADLINE CELLS  (reported | substring | word-boundary)")
-    print(f"    {'cell':30s} {'paper':>7s} {'substr':>7s} {'wordbd':>7s}  match")
-    for label, prefix, sub, method, subset, ch, reported in HEADLINE:
+    print("\n[3] HEADLINE CELLS  (reported | substring | word-boundary | halt-gated)")
+    print(f"    {'cell':26s} {'prefix':8s} {'denom':7s} {'paper':>7s} {'recomp':>7s} {'wordbd':>7s} {'halt-gated':>10s}  match")
+    for label, prefix, sub, method, subset, ch, denom, reported in HEADLINE:
         pc = cache.get((prefix, sub, method, subset))
         if not pc:
-            print(f"    {label:30s}  (no local transcripts)")
+            print(f"    {label:26s} {prefix:8s} {denom:7s}  (no local transcripts)")
             continue
-        ss = pc[ch]["ss"]
-        wb = pc[ch]["wb"]
-        ok = "OK" if round(ss, 3) == round(wb, 3) else "DIFF"
-        print(f"    {label:30s} {reported:7.3f} {ss:7.3f} {wb:7.3f}  {ok}")
+        if denom == "ungated":
+            recomp = pc[ch]["ungated_ss"]
+            wb = pc[ch]["ungated_wb"]
+        else:
+            recomp = pc[ch]["gated_ss"]
+            wb = pc[ch]["gated_wb"]
+        gated = pc[ch]["gated_ss"]
+        ok = "OK" if round(recomp, 3) == round(reported, 3) else "DIFF"
+        print(f"    {label:26s} {prefix:8s} {denom:7s} {reported:7.3f} {recomp:7.3f} {wb:7.3f} {gated:10.3f}  {ok}")
 
     # 22--86% range = Llama baseline OR(all) min/max over C, Rtext, Rstruct
     nonp = []
     for sub in ("C", "R-text", "R-struct"):
-        pc = cache.get(("llama", sub, "none", "forget"))
+        pc = cache.get(("v77app", sub, "none", "forget"))
         if pc:
             nonp.append((sub, pc["OR_all"]["ss"], pc["OR_all"]["wb"]))
     if nonp:

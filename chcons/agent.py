@@ -31,6 +31,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from chcons.rag import Retriever
 
+from chcons.transcript import FINAL_ANSWER_RE, parse_final_answer
+
 # torch / transformers are imported lazily inside the loaders and methods that
 # build or run a local model (load_react_agent, _generate_block, elicit_summary).
 # This keeps `import chcons.agent` torch-free, so the API-served
@@ -121,12 +123,9 @@ _THOUGHT_RE = re.compile(r"Thought:\s*(.+?)(?=\n(?:Action|Final Answer|Answer)\s
 # Multi-tool: parse `Action: <tool_name>[<args>]` for any registered tool.
 _ACTION_RE = re.compile(r"Action:\s*(\w+)\s*\[\s*(.+?)\s*\]", re.DOTALL)
 # Accept both "Final Answer:" and bare "Answer:" — LoRA-finetuned model often
-# emits the latter, skipping ReAct format. Anchor to line-start to avoid matching
-# "Answer" embedded in prose.
-_FINAL_RE = re.compile(
-    r"(?:^|\n)(?:Final\s+)?Answer:\s*(.+?)(?:\nObservation:|\Z)",
-    re.DOTALL | re.MULTILINE,
-)
+# emits the latter, skipping ReAct format. The shared parser stops at the first
+# line-start protocol label, so repeated turns cannot be swallowed into answer.
+_FINAL_RE = FINAL_ANSWER_RE
 
 
 @dataclass
@@ -142,6 +141,9 @@ class AgentTrace:
     Z_summary: str = ""                                      # post-trace attacker-elicited summary
     raw: str = ""                                            # full LLM scratch text
     halted_reason: str = ""                                  # 'final_answer' | 'max_iters' | 'parse_error'
+    api_incidents: list[dict] = field(default_factory=list)
+    api_retries: list[dict] = field(default_factory=list)
+    api_reasoning: list[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -297,7 +299,14 @@ class ReActAgent:
                 trace.raw = generated
                 continue
             if m_final:
-                trace.answer = m_final.group(1).strip()
+                answer = parse_final_answer(generated)
+                if not answer:
+                    # A marker without content is not a healthy terminal answer. Keep the raw
+                    # generation for audit and fail closed instead of labelling it final_answer.
+                    trace.Z_CoT = [m.group(1).strip() for m in _THOUGHT_RE.finditer(generated)]
+                    trace.halted_reason = "parse_error"
+                    return trace
+                trace.answer = answer
                 trace.Z_CoT = [m.group(1).strip() for m in _THOUGHT_RE.finditer(generated)]
                 # STaR Module 3 — final-step inspect: refuse if final answer is sensitive
                 if self.tasl is not None:
@@ -405,7 +414,10 @@ class ReActAgent:
             self.intervention.before_generation(self, prompt)
         try:
             inputs = self.tokenizer(
-                prompt, return_tensors="pt", add_special_tokens=False
+                prompt,
+                return_tensors="pt",
+                add_special_tokens=False,
+                return_token_type_ids=False,
             ).to(self.model.device)
             from transformers import LogitsProcessorList
             with torch.no_grad():
@@ -443,7 +455,10 @@ class ReActAgent:
             self.intervention.before_generation(self, prompt_text)
         try:
             inputs = self.tokenizer(
-                prompt_text, return_tensors="pt", add_special_tokens=False
+                prompt_text,
+                return_tensors="pt",
+                add_special_tokens=False,
+                return_token_type_ids=False,
             ).to(self.model.device)
             from transformers import LogitsProcessorList
             with torch.no_grad():

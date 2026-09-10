@@ -15,6 +15,7 @@ import json
 import random
 import time
 from pathlib import Path
+from typing import Any
 
 import re
 
@@ -23,6 +24,63 @@ import re
 # no-CUDA slim image). chcons.audit / chcons.metrics are torch-free.
 from chcons.audit import startup_audit
 from chcons.metrics import LeakageResult, aggregate, per_query_leakage
+
+DEFAULT_MAX_NEW_TOKENS = 256
+
+# Fixed short-name vocabulary. Keep this at module scope so release tests and
+# downstream wrappers can verify CLI support without running argparse or loading a
+# model. Import-by-path adapters remain accepted separately below.
+_KNOWN_UNLEARN = {
+    "none", "star", "star_full", "noise", "eco", "cha", "depn",
+    "o3", "leace", "repe", "mlp_probe", "rlace", "uld",
+}
+
+
+def _elicit_summary(
+    agent: Any, name: str, max_new_tokens: int | None
+) -> str:
+    if max_new_tokens is None:
+        return agent.elicit_summary(name)
+    return agent.elicit_summary(name, max_new_tokens=max_new_tokens)
+
+
+def _record_reasoning_effort(
+    current_config: dict[str, Any], reasoning_effort: str | None
+) -> None:
+    if reasoning_effort is not None:
+        current_config["reasoning_effort"] = reasoning_effort
+
+
+def _reasoning_observations(trace: Any, call_site: str) -> list[str]:
+    return [
+        item["text"]
+        for item in trace.api_reasoning
+        if item.get("call_site") == call_site
+    ]
+
+
+def _assemble_channels(trace: Any, summary: str, api_path: bool) -> dict[str, list]:
+    z_cot = trace.Z_CoT
+    z_summary = [summary] if summary else []
+    if api_path:
+        z_cot = z_cot + _reasoning_observations(trace, "step")
+        z_summary = z_summary + _reasoning_observations(trace, "summary")
+    return {
+        "Z_CoT": z_cot,
+        "Z_tool": trace.Z_tool,
+        "Z_tool_wide": trace.Z_tool + trace.Z_tool_obs,
+        "Z_RAG": trace.Z_RAG,
+        "Z_answer": [trace.answer] if trace.answer else [],
+        "Z_summary": z_summary,
+    }
+
+
+def _add_api_reasoning_to_row(rec: dict, trace: Any, api_path: bool) -> dict:
+    if api_path:
+        rec["api_incidents"] = trace.api_incidents
+        rec["api_retries"] = trace.api_retries
+        rec["raw_reasoning"] = trace.api_reasoning
+    return rec
 
 
 def main() -> None:
@@ -38,7 +96,10 @@ def main() -> None:
     parser.add_argument("--out-jsonl", type=Path, default=Path("results/phase1_baseline_leakage.jsonl"))
     parser.add_argument("--out-summary", type=Path, default=Path("results/phase1_baseline_leakage.json"))
     parser.add_argument("--max-iters", type=int, default=6)
-    parser.add_argument("--max-new-tokens", type=int, default=256)
+    parser.add_argument("--max-new-tokens", type=int, default=DEFAULT_MAX_NEW_TOKENS)
+    parser.add_argument("--summary-max-new-tokens", type=int, default=None)
+    parser.add_argument("--reasoning-effort", choices=["low", "medium", "high"], default=None,
+                        help="Optional reasoning effort for API models only.")
     parser.add_argument("--lora-path", type=Path, default=None,
                         help="Optional LoRA adapter path (Phase 2+ post-injection eval)")
     parser.add_argument("--api-model", default=None,
@@ -69,7 +130,7 @@ def main() -> None:
         "--unlearn",
         default="none",
         help="unlearning method: none | star | star_full | noise | "
-             "{eco,falcon,cha,depn,o3,leace,repe,mlp_probe,rlace} K-test panel methods; "
+             "{eco,cha,depn,o3,leace,repe,mlp_probe,rlace,uld} K-test panel methods; "
              "OR a path to your own adapter '<file>.py[::ClassName]' (import-by-path plugin). "
              "(choices= removed to allow plugin paths; validated after parsing.)",
     )
@@ -188,6 +249,9 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    if args.reasoning_effort is not None and args.api_model is None:
+        parser.error("--reasoning-effort requires --api-model (local models do not support it)")
+
     # --api-model runs the `none` external-endpoint measurement on C/R substrates
     # only (API weights are immutable, so no K-Bench intervention applies). Validate
     # BEFORE the plugin-spec resolution below so an incompatible combo fails before
@@ -204,8 +268,8 @@ def main() -> None:
     # --unlearn accepts a fixed vocabulary OR an import-by-path plugin ('<file>.py[::Class]').
     # choices= was removed to allow paths; validate here so a typo is not silently run as
     # the 'none' baseline.
-    _KNOWN_UNLEARN = {"none", "star", "star_full", "noise",
-                      "eco", "falcon", "cha", "depn", "o3", "leace", "repe", "mlp_probe", "rlace"}
+    if args.unlearn == "falcon":
+        parser.error("--unlearn 'falcon' is experimental; see INSTALL.md")
     if args.unlearn not in _KNOWN_UNLEARN:
         if ".py" not in args.unlearn:
             parser.error(f"--unlearn must be one of {sorted(_KNOWN_UNLEARN)} or a path to an "
@@ -353,6 +417,13 @@ def main() -> None:
         "n_incontext_bios": args.n_incontext_bios,
         "allow_direct_answer": args.allow_direct_answer,
     }
+    if args.max_new_tokens != DEFAULT_MAX_NEW_TOKENS:
+        current_config["max_new_tokens"] = args.max_new_tokens
+    if args.summary_max_new_tokens is not None:
+        current_config["summary_max_new_tokens"] = args.summary_max_new_tokens
+    _record_reasoning_effort(current_config, args.reasoning_effort)
+    if args.api_model is not None:
+        current_config["capture_reasoning"] = True
     if config_path.exists():
         prev_config = json.loads(config_path.read_text())
         if prev_config != current_config:
@@ -526,6 +597,7 @@ def main() -> None:
                 embed_model=args.embed_model,
                 max_iters=args.max_iters,
                 max_new_tokens=args.max_new_tokens,
+                reasoning_effort=args.reasoning_effort,
                 facts_path=facts_path_for_agent,
                 incontext_pii_block=incontext_pii_block,
                 available_tools=tool_allowlist,
@@ -622,9 +694,10 @@ def main() -> None:
             print(f"[unlearn] Gaussian noise control: sigma={args.noise_sigma}")
             agent.logits_processors.append(GaussianNoiseLogits(sigma=args.noise_sigma))
 
-        # K-test panel methods (eco/falcon/cha/depn/o3) via common UnlearnIntervention ABC
+        # Available panel methods via the common UnlearnIntervention ABC. Experimental
+        # registry entries (including FALCON) remain constructible outside this CLI.
         intervention = None
-        if args.unlearn in ("eco", "falcon", "cha", "depn", "o3", "leace", "repe", "mlp_probe", "rlace") \
+        if args.unlearn in ("eco", "cha", "depn", "o3", "leace", "repe", "mlp_probe", "rlace", "uld") \
                 or ".py" in args.unlearn:
             from chcons.methods import get_intervention
             from chcons.unlearn import split_forget_retain
@@ -672,7 +745,9 @@ def main() -> None:
                     m = re.match(r"^(?:What is|Who is|Where does)\s+(.+?)'s\s", q["query"])
                     name = m.group(1) if m else q["query"]
                     try:
-                        summary = agent.elicit_summary(name)
+                        summary = _elicit_summary(
+                            agent, name, args.summary_max_new_tokens
+                        )
                     except Exception as e:
                         summary = ""
                         summary_error = repr(e)
@@ -685,14 +760,9 @@ def main() -> None:
                 # non-LoRA injection (Setup C), the agent typically calls tools with
                 # entity-name args and receives PII *in the observation* — args-only
                 # Z_tool misses this. Z_tool kept as legacy/back-compat column.
-                channels = {
-                    "Z_CoT": trace.Z_CoT,
-                    "Z_tool": trace.Z_tool,
-                    "Z_tool_wide": trace.Z_tool + trace.Z_tool_obs,
-                    "Z_RAG": trace.Z_RAG,
-                    "Z_answer": [trace.answer] if trace.answer else [],
-                    "Z_summary": [summary] if summary else [],
-                }
+                channels = _assemble_channels(
+                    trace, summary, api_path=args.api_model is not None
+                )
                 # CER/AER per channel
                 results = []
                 for ch_name, obs in channels.items():
@@ -729,6 +799,9 @@ def main() -> None:
                         list(agent.tasl.decisions) if agent.tasl is not None else []
                     ),
                 }
+                _add_api_reasoning_to_row(
+                    rec, trace, api_path=args.api_model is not None
+                )
                 f.write(json.dumps(rec) + "\n")
                 f.flush()
                 if intervention is not None:

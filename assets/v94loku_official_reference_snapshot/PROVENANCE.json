@@ -1,0 +1,42 @@
+{
+  "commit": "4540a924f11a4376850670018ddd25eac7ef5ba5",
+  "files": [
+    {
+      "blob_oid": "da0ef949839c585035375eb47e4a1dd814f889ab",
+      "bytes": 1068,
+      "path": "LICENSE",
+      "raw_url": "https://raw.githubusercontent.com/csm9493/efficient-llm-unlearning/4540a924f11a4376850670018ddd25eac7ef5ba5/LICENSE",
+      "sha256": "69573f23dbe8610fd83ffdff10b6bf482ff739bf6ed7dcb596ca252143d43a20"
+    },
+    {
+      "blob_oid": "a92f9aa13a7736b98c0d4f62d8ee7b8f7085a091",
+      "bytes": 1520,
+      "path": "TOFU/config/model_config.yaml",
+      "raw_url": "https://raw.githubusercontent.com/csm9493/efficient-llm-unlearning/4540a924f11a4376850670018ddd25eac7ef5ba5/TOFU/config/model_config.yaml",
+      "sha256": "878d20bfaa778957ee5c5c6f4de860d227a6b974278a4b8ac0affc41b09b1743"
+    },
+    {
+      "blob_oid": "33c1e770d17136dea2253ef7b189ff742d1247d9",
+      "bytes": 8137,
+      "path": "TOFU/data_module.py",
+      "raw_url": "https://raw.githubusercontent.com/csm9493/efficient-llm-unlearning/4540a924f11a4376850670018ddd25eac7ef5ba5/TOFU/data_module.py",
+      "sha256": "e3285837875d3c0ab9e6711179865aec88f4e1a6d8eb33ac80545917f5a2f636"
+    },
+    {
+      "blob_oid": "c1dd0bd44305542422ccd0cc2465bfcf7c55d5d7",
+      "bytes": 12554,
+      "path": "TOFU/forget.py",
+      "raw_url": "https://raw.githubusercontent.com/csm9493/efficient-llm-unlearning/4540a924f11a4376850670018ddd25eac7ef5ba5/TOFU/forget.py",
+      "sha256": "a59a26df673f73b28b66ba4ffe3067a9f3594137cf05a613aa2124797343bb60"
+    }
+  ],
+  "kind": "official_reference_snapshot",
+  "repository": "https://github.com/csm9493/efficient-llm-unlearning",
+  "schema": "v94loku-official-reference-snapshot@1",
+  "tree": "9bf399f968cb2a407af4a6c19d18f67023fa3dad",
+  "verification": {
+    "executed_at_runtime": false,
+    "purpose": "faithfulness_reference",
+    "runtime_not_executed": true
+  }
+}

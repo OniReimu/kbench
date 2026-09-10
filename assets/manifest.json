@@ -19,5 +19,83 @@
       "contents": "`none` baseline cells for every (substrate, base model) pair reported in the paper"
     }
   },
+  "files": {
+    "target": [
+      {
+        "path": "Llama-3.1-8B-kbench-target-adapter/adapter_model.safetensors",
+        "size_bytes": 335604696,
+        "sha256": "185217937208be1398ba575ea9b0d95b44a107483e083f79497306a62ff60417",
+        "dest": "models/Llama-3.1-8B-kbench-target-adapter"
+      },
+      {
+        "path": "Llama-3.1-8B-kbench-target-adapter/adapter_config.json",
+        "size_bytes": 1111,
+        "sha256": "dbedc2ccd151be806775e152e760f260dd712b37f391d39a9d0753c7581a8562",
+        "dest": "models/Llama-3.1-8B-kbench-target-adapter"
+      },
+      {
+        "path": "Llama-3.1-8B-kbench-target-adapter/README.md",
+        "size_bytes": 2639,
+        "sha256": "4eaa1669b8e8d68b0af821cb5849f66f288c8c5bec97660774543ce8a4ea9139",
+        "dest": "models/Llama-3.1-8B-kbench-target-adapter"
+      },
+      {
+        "path": "Llama-3.1-8B-kbench-target-adapter/LICENSE",
+        "size_bytes": 7627,
+        "sha256": "64e1b2889b7892e6bbe7a7ed5bfe6ff793c61f9d584345f8f41cf9f5cb30a369",
+        "dest": "models/Llama-3.1-8B-kbench-target-adapter"
+      },
+      {
+        "path": "Llama-3.1-8B-kbench-target-adapter/USE_POLICY.md",
+        "size_bytes": 4691,
+        "sha256": "a568f2ebc73cec3fd74ba2afd992d4e945a8c7a9d851f9b66163aac834b7b859",
+        "dest": "models/Llama-3.1-8B-kbench-target-adapter"
+      },
+      {
+        "path": "Llama-3.1-8B-kbench-target-adapter/NOTICE",
+        "size_bytes": 116,
+        "sha256": "9b4ce1898c6fdbefd6d0ca4d40a55cb994ed86ae3fd56166866b988bee7a6464",
+        "dest": "models/Llama-3.1-8B-kbench-target-adapter"
+      }
+    ],
+    "indexes": [
+      {
+        "path": "indexes/wiki_index_v21_target_in/index.faiss",
+        "size_bytes": 6113131779,
+        "sha256": "f6a46affcfea5873e9ed6d9ea141082c402033efcfb8fa46fa9ff7fdeb1829bb",
+        "dest": "data/wiki_index_v21_target_in"
+      },
+      {
+        "path": "indexes/wiki_index_v21_target_in/passages.jsonl",
+        "size_bytes": 2315209246,
+        "sha256": "6114517cb5b7cbf5bb3cf1e638e80a8642e3bd97ee834e241111bb46d73c6b4c",
+        "dest": "data/wiki_index_v21_target_in"
+      },
+      {
+        "path": "indexes/wiki_index_v21_target_in/inject_summary.json",
+        "size_bytes": 249,
+        "sha256": "5acd00407e43860b618eb3b94537ddbef5b295e16aaee3a67e9c8c82045b9d84",
+        "dest": "data/wiki_index_v21_target_in"
+      },
+      {
+        "path": "indexes/wiki_index_v21_distractor/index.faiss",
+        "size_bytes": 6110051779,
+        "sha256": "7ac15eb4d2422a9c10dbb8488bd035f0a4c2fa2bd17524050cdc8b584e54900f",
+        "dest": "data/wiki_index_v21_distractor"
+      },
+      {
+        "path": "indexes/wiki_index_v21_distractor/passages.jsonl",
+        "size_bytes": 2314713699,
+        "sha256": "33bd430b43e2a9fe0cf9d9144aceecb695d5b6aa93fcf7c88d04e5414815b26f",
+        "dest": "data/wiki_index_v21_distractor"
+      },
+      {
+        "path": "indexes/wiki_index_v21_distractor/inject_summary.json",
+        "size_bytes": 249,
+        "sha256": "39f0a11620fa5f8790f3f94050d3de7678a0962dedca03f85a09b041388e6cca",
+        "dest": "data/wiki_index_v21_distractor"
+      }
+    ]
+  },
   "note": "kbench fetch-assets downloads <base_url>/<bundle.file>, verifies sha256, and unpacks into <release>/<dest>. Set base_url via --base-url / $KBENCH_ASSETS_URL at fetch time, and upload the tarballs from make-assets --out to that host."
 }
