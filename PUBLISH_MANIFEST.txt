@@ -157,3 +157,5 @@ tests/test_b2_scoring_and_provenance.py
 tests/test_evaluator_sidecar.py
 tests/test_p2b_fixes.py
 tests/test_external_and_crossmodel_reference.py
+tests/test_thinking_and_pool.py
+tests/test_profile_guard.py

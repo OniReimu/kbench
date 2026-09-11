@@ -19,6 +19,9 @@
     "R-struct"
   ],
   "substrate_seeds": {
+    "P": [
+      0
+    ],
     "R-text": [
       0,
       137
@@ -35,6 +38,9 @@
       "lora_path": null,
       "allow_direct_answer": true,
       "n_incontext_bios": 50
+    },
+    "C": {
+      "enable_thinking": true
     }
   },
   "protocol": "1"

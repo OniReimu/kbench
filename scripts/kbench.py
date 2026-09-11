@@ -412,6 +412,39 @@ def _assert_resume_identity(sidecar: Path, candidate_name: str, fingerprint: str
         )
 
 
+def _profile_mismatch(reference: dict | None, substrate: str, config: dict) -> str | None:
+    """Why a candidate sidecar lacks an evaluation setting its reference requires, or None.
+
+    Only candidate cells are checked: the published baselines predate the enable_thinking
+    sidecar field, and the reference profile describes how they were generated.
+    """
+    if not isinstance(reference, dict) or substrate != "C" or not isinstance(config, dict):
+        return None
+    profile = reference.get("evaluation", {}).get("C", {})
+    if profile.get("enable_thinking") and config.get("enable_thinking") is not True:
+        return ("was generated without the chat-template reasoning mode that this reference "
+                "requires on substrate C (enable_thinking)")
+    return None
+
+
+def _candidate_profile_mismatch(prefix: str, substrate: str, name: str) -> str | None:
+    reference = load_reference(prefix)
+    sub_file = SUB_CLI2FILE[substrate]
+    for split in ("forget", "retain"):
+        for seed in kscore.SEEDS:
+            sidecar = kscore.RES / f"{prefix}_{sub_file}_{name}_{split}_seed{seed}.config.json"
+            if not sidecar.is_file():
+                continue
+            try:
+                config = json.loads(sidecar.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            why = _profile_mismatch(reference, substrate, config)
+            if why:
+                return f"{sidecar.name} {why}"
+    return None
+
+
 def _candidate_is_comparable(prefix: str, substrate: str, name: str) -> bool:
     sub_file = SUB_CLI2FILE[substrate]
     for split in ("forget", "retain"):
@@ -876,6 +909,9 @@ def _has_candidate_cells(prefix: str, name: str, subs: list[str]) -> bool:
 
 def _reference_eval_args(reference: dict, substrate: str) -> list[str]:
     """Return evaluator flags needed to reproduce a reference substrate setup."""
+    if substrate == "C":
+        profile = reference.get("evaluation", {}).get("C", {})
+        return ["--enable-thinking"] if profile.get("enable_thinking") else []
     if substrate != "P":
         return []
     profile = reference.get("evaluation", {}).get("P", {})
@@ -982,6 +1018,7 @@ def run_eval(args):
         sys.exit(2)
     splits = ("forget",) if api_without_reference else ("forget", "retain")
     existing = []
+    existing_sub: dict[Path, str] = {}
     for sub in subs:
         sf = SUB_CLI2FILE[sub]
         for split in splits:
@@ -990,6 +1027,7 @@ def run_eval(args):
                 p = kscore.RES / f"{tag}.jsonl"
                 if p.exists():
                     existing.append(p)
+                    existing_sub[p] = sub
     if existing and not getattr(args, "resume", False):
         print(f"{len(existing)} existing cell file(s) found for prefix='{args.prefix}', name='{args.name}':")
         for p in existing[:5]:
@@ -1010,6 +1048,15 @@ def run_eval(args):
                 )
             except ValueError as exc:
                 print(f"resume refused: {exc}")
+                sys.exit(2)
+            sidecar_path = config_path if config_path.exists() else partial_path
+            try:
+                previous_config = json.loads(sidecar_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                previous_config = {}
+            why = _profile_mismatch(reference, existing_sub[out_jsonl], previous_config)
+            if why:
+                print(f"resume refused: {sidecar_path.name} {why}; use a new --name to start a new run")
                 sys.exit(2)
     for sub in subs:
         sf = SUB_CLI2FILE[sub]
@@ -1081,6 +1128,11 @@ def run_score(args):
     if args.base is None:
         args.base = load_reference(args.prefix)["base_model"]
     candidate_name = args.name
+    for substrate in subs:
+        why = _candidate_profile_mismatch(args.prefix, substrate, candidate_name)
+        if why:
+            print(f"profile mismatch: {why}; re-run these cells with the current kbench eval")
+            sys.exit(2)
     if not _has_candidate_cells(args.prefix, candidate_name, subs):
         print(
             "missing_candidate_cells: no cells found for "
@@ -1479,12 +1531,8 @@ CANONICAL_CELL_MAP = {
     "qwen_C_none_retain_seed0.jsonl": ("v77qwen_C_none_retain_seed0.jsonl", "Qwen/Qwen3.5-9B"),
     "qwen_C_none_retain_seed137.jsonl": ("v77qwen_C_none_retain_seed137.jsonl", "Qwen/Qwen3.5-9B"),
     "qwen_C_none_retain_seed271.jsonl": ("v77qwen_C_none_retain_seed271.jsonl", "Qwen/Qwen3.5-9B"),
-    "qwen_P_none_forget_seed0.jsonl": ("v77app_P_none_qwen_forget_seed0.jsonl", "Qwen/Qwen3.5-9B"),
-    "qwen_P_none_forget_seed137.jsonl": ("v77app_P_none_qwen_forget_seed137.jsonl", "Qwen/Qwen3.5-9B"),
-    "qwen_P_none_forget_seed271.jsonl": ("v77app_P_none_qwen_forget_seed271.jsonl", "Qwen/Qwen3.5-9B"),
-    "qwen_P_none_retain_seed0.jsonl": ("v77app_P_none_qwen_retain_seed0.jsonl", "Qwen/Qwen3.5-9B"),
-    "qwen_P_none_retain_seed137.jsonl": ("v77app_P_none_qwen_retain_seed137.jsonl", "Qwen/Qwen3.5-9B"),
-    "qwen_P_none_retain_seed271.jsonl": ("v77app_P_none_qwen_retain_seed271.jsonl", "Qwen/Qwen3.5-9B"),
+    "qwen_P_none_forget_seed0.jsonl": ("v88c_P_none_qwen_forget_seed0.jsonl", "Qwen/Qwen3.5-9B"),
+    "qwen_P_none_retain_seed0.jsonl": ("v88c_P_none_qwen_retain_seed0.jsonl", "Qwen/Qwen3.5-9B"),
     "qwen_R-struct_none_forget_seed0.jsonl": ("v85xr_qwen_R-struct_none_forget_seed0.jsonl", "Qwen/Qwen3.5-9B"),
     "qwen_R-struct_none_forget_seed137.jsonl": ("v85xr_qwen_R-struct_none_forget_seed137.jsonl", "Qwen/Qwen3.5-9B"),
     "qwen_R-struct_none_forget_seed271.jsonl": ("v85xr_qwen_R-struct_none_forget_seed271.jsonl", "Qwen/Qwen3.5-9B"),

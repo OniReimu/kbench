@@ -196,9 +196,12 @@ class ReActAgent:
     # without prior tool call). Required for InCtx regime where the
     # answer is in context and forcing tool calls causes search loops.
     allow_direct_answer: bool = False
+    # Chat-template reasoning mode is off by default for substrate P and the
+    # retrieval substrates; enable it for the Qwen3.5-9B substrate-C protocol.
+    enable_thinking: bool = False
 
     def _apply_template(self, messages: list[dict]) -> str:
-        """Render the chat template with any reasoning scratchpad suppressed.
+        """Render the chat template with the configured reasoning mode.
 
         Qwen3.5's template appends a bare `<think>` to the generation prompt
         unless told otherwise, so the model opens a reasoning scratchpad that
@@ -208,14 +211,18 @@ class ReActAgent:
         Llama-3.1 and Mistral-v0.3, whose templates have no thinking mode.
         Passing the flag leaves those two prompts byte-identical, so it changes
         nothing for a base that never had a thinking mode to begin with.
+
+        The mode is off by default (`enable_thinking=False`). The Qwen3.5-9B
+        substrate-C protocol turns it on, matching how that substrate's
+        untreated baseline was generated.
         """
         try:
             return self.tokenizer.apply_chat_template(
                 messages, tokenize=False, add_generation_prompt=True,
-                enable_thinking=False,
+                enable_thinking=self.enable_thinking,
             )
         except TypeError:
-            # Template does not accept the flag; nothing to suppress.
+            # Template does not accept the flag; render without it.
             return self.tokenizer.apply_chat_template(
                 messages, tokenize=False, add_generation_prompt=True
             )

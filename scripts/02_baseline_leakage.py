@@ -100,6 +100,11 @@ def main() -> None:
     parser.add_argument("--summary-max-new-tokens", type=int, default=None)
     parser.add_argument("--reasoning-effort", choices=["low", "medium", "high"], default=None,
                         help="Optional reasoning effort for API models only.")
+    parser.add_argument(
+        "--enable-thinking", action="store_true",
+        help="Keeps the chat template's native reasoning mode; used for "
+             "Qwen3.5-9B on substrate C.",
+    )
     parser.add_argument("--lora-path", type=Path, default=None,
                         help="Optional LoRA adapter path (Phase 2+ post-injection eval)")
     parser.add_argument("--api-model", default=None,
@@ -434,6 +439,8 @@ def main() -> None:
     if args.summary_max_new_tokens is not None:
         current_config["summary_max_new_tokens"] = args.summary_max_new_tokens
     _record_reasoning_effort(current_config, args.reasoning_effort)
+    if args.enable_thinking:
+        current_config["enable_thinking"] = True
     if args.api_model is not None:
         current_config["capture_reasoning"] = True
     existing_config_path = config_path if config_path.exists() else partial_config_path
@@ -633,6 +640,7 @@ def main() -> None:
             available_tools=tool_allowlist,
             allow_direct_answer=args.allow_direct_answer,
             prefill_thought=args.prefill_thought,
+            enable_thinking=args.enable_thinking,
         )
         print(f"[load] done in {time.time() - t0:.1f}s")
 

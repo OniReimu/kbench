@@ -38,15 +38,15 @@ For the maintainers' record of which environment stack produced which published 
 ## 1. Synthetic PII corpus (deterministic, no GPU)
 ```bash
 uv run --no-sync python scripts/01_generate_pii.py --n-facts 5000 --seed 0 --out-dir data/pii_facts --name v1
-uv run --no-sync python scripts/00d_build_distractor_pool.py     # v2.1 distractor pool (startup-audit input)
 ```
-Produces `data/pii_facts/` (the synthetic corpus and query set) and the v2.1
-distractor pool. The PII is Faker-synthetic — no real persons (see `docs/DATASHEET.md`).
+Produces `data/pii_facts/` (the synthetic corpus and query set). The PII is
+Faker-synthetic — no real persons (see `docs/DATASHEET.md`).
 Fully regenerable from the seed. The LoRA "injection" (`scripts/03_inject_pii.py`)
-is a GPU step covered in section 3, not here. The distractor pool (`data/v21/bios_distractor.jsonl`) is regenerated
-as the retain-adapter split; the original composition was not preserved, so the
-P-substrate headline is unaffected (P reads it neither at eval nor at LoRA training)
-while C / R-substrate context padding may differ marginally from the published run.
+is a GPU step covered in section 3, not here. The published distractor pool ships at
+`data/v21/bios_distractor.jsonl` (4,000 bios). It is the agent's `lookup_record`
+database on P, C, and R-text; R-struct uses the target bios (see
+`scripts/02_baseline_leakage.py`). `scripts/00d_build_distractor_pool.py` regenerates
+a different, smaller pool and is not needed to reproduce the published cells.
 
 ## 2. RAG / Wiki index (GPU, ~hours for the production index)
 ```bash

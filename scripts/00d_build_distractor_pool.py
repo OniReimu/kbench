@@ -1,16 +1,10 @@
-"""Regenerate the v2.1 distractor pool from the shipped PII corpus.
+"""Regenerate an alternative v2.1 distractor pool from the shipped PII corpus.
 
-The original ``data/v21/bios_distractor.jsonl`` (the retain-side "distractor" bios used
-for the startup-audit invariants and for C / R-substrate context padding) was built
-out-of-band and is not redistributed. This script regenerates a valid pool -- the
-retain-adapter entities -- from the shipped corpus. It satisfies the audit invariants
-by construction: the pool is a subset of the retain set and is disjoint from the forget
-set, and the retain-adapter entities are padding entities that the retain queries never
-target.
-
-The exact original composition was not preserved, so C / R-substrate context padding may
-differ marginally from the published run. The P-substrate headline is unaffected: P reads
-this file neither at eval time nor at LoRA-training time. Stdlib only, deterministic.
+The published 4,000-bio pool ships at ``data/v21/bios_distractor.jsonl``. The agent uses
+it as the ``lookup_record`` database on P, C, and R-text; R-struct uses the target bios
+(see ``scripts/02_baseline_leakage.py``). This script deterministically regenerates a
+different, smaller retain-adapter pool. It is not needed to reproduce the published
+cells, but the result remains forget-disjoint and satisfies the startup-audit invariants.
 
 Usage: python3 scripts/00d_build_distractor_pool.py
 """
