@@ -1,0 +1,48 @@
+# K-Bench Leaderboard Submission Metadata Template
+# Copy this file to leaderboard/submissions/<method-name>/metadata.yaml and fill in your details.
+
+method_name: "MyMethod"
+
+paper:
+  title: "Title of Paper or Technical Report"
+  link: "https://arxiv.org/abs/xxxx.xxxxx"
+
+code:
+  link: "https://github.com/organization/repository"
+
+contact:
+  name: "Author Name"
+  email: "author@example.com"
+
+# The declared base model architecture against which the method was evaluated.
+# Default is meta-llama/Llama-3.1-8B-Instruct.
+base_model: "meta-llama/Llama-3.1-8B-Instruct"
+
+# Substrates evaluated (P, C, R-text, R-struct).
+# Parametric-only methods report [P]; portable methods report all four.
+substrates:
+  - "P"
+  # - "C"
+  # - "R-text"
+  # - "R-struct"
+
+# Evaluation seeds. Minimally [0] is required (n=200 forget and 200 retain queries per cell).
+# Additional seeds [137, 271] provide optional extra evidence.
+seeds:
+  - 0
+  # - 137
+  # - 271
+
+# Number of queries per split per seed (standard setting is 200).
+n: 200
+
+# Git commit SHA of the K-Bench release repository used for evaluation.
+kbench_commit: "HEAD"
+
+# Checkpoint or adapter availability.
+checkpoint_or_adapter:
+  public: true
+  url: "https://huggingface.co/organization/model-or-adapter"
+
+# Any deviations from the published method, hyperparameters, or special instructions.
+deviations_from_published_method: "None. Evaluated with default release hyperparameters."

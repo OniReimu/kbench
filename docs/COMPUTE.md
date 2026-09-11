@@ -27,11 +27,13 @@ faithful TOFU/MUSE/WMDP probes.
 
 ## Environments
 
-The base stack is pinned in `pyproject.toml` (`uv sync`); the Llama-3.1-8B and
-Qwen3.5-9B experiments run in this main environment. One additional pinned
+The maintainers' exact main-environment versions came from their monorepo lock and
+are published as `main_pinned_requirements.txt`; `pyproject.toml` holds compatible
+dependency ranges. The Llama-3.1-8B and Qwen3.5-9B experiments run in this main
+environment. One additional pinned
 requirement file ships for the Mistral-7B-v0.3 stack, whose transformers version
 diverges: `cross_model_pinned_requirements.txt` (transformers 4.51.3). Build it as
-a separate venv (e.g. `uv venv .venv-mistral` then `uv pip install -r
+a separate venv (e.g. `uv venv --python 3.11 .venv-mistral` then `uv pip install -r
 cross_model_pinned_requirements.txt`); do not install it into the main project
 venv. `qwen_pinned_requirements.txt` pins the older Qwen2.5-era stack (transformers
 4.47.1) and is retained for reproducing that compatibility path. Weight-based
@@ -46,7 +48,7 @@ accepted; its `FILE_RE` / aggregation are
 single-model by design — the nested substrate/method/seed dict has no model
 axis). The cross-model rows (Qwen / Mistral) are scored under separate per-family
 prefixes and aggregated independently per family; the `substrate` target prints the
-commands rather than pooling them into the v77app verdict. Run Mistral in its pinned
+commands rather than pooling them into the single-model Llama verdict. Run Mistral in its pinned
 venv above and Qwen in the main environment.
 
 ## Wall-clock guidance for `reproduce.sh`

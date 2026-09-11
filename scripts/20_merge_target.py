@@ -1,51 +1,58 @@
-"""Merge the PII LoRA (lora_v1 = target+distractor) into the base model to produce a
-full PII-bearing 'target' checkpoint.
-
-This is the correct starting point for weight-based unlearning. The earlier
-earlier open-unlearning runs unlearned from the *bare* base model, which
-never memorized the PII (the PII lived in a frozen LoRA loaded only at eval time),
-so the weight edits never touched the PII storage. Merging the LoRA into the base
-gives a single full model whose weights actually encode the PII, matching the
-TOFU/MUSE setup (full model fine-tuned on the data, then unlearned).
-
-Output is a standard HF safetensors directory, loadable by the open-unlearning
-.venv-openunlearn as `model.model_args.pretrained_model_name_or_path`.
-"""
+"""Merge the published K-Bench target adapter into its pinned Llama base model."""
 
 from __future__ import annotations
 
 import argparse
+from collections.abc import Sequence
 from pathlib import Path
 
 import torch
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+DEFAULT_BASE = "meta-llama/Llama-3.1-8B-Instruct"
+DEFAULT_REVISION = "0e9e39f249a16976918f6564b8830bc894c89659"
+DEFAULT_ADAPTER = Path("models/Llama-3.1-8B-kbench-target-adapter")
+DEFAULT_OUT = Path("models/target_merged")
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--base", default="meta-llama/Llama-3.1-8B-Instruct")
-    ap.add_argument("--lora", type=Path, default=Path("models/lora_v1/final_adapter"))
-    ap.add_argument("--out", type=Path, default=Path("models/target_merged"))
-    args = ap.parse_args()
 
-    print(f"[load] base: {args.base}")
-    tok = AutoTokenizer.from_pretrained(args.base)
-    base = AutoModelForCausalLM.from_pretrained(
-        args.base, torch_dtype=torch.bfloat16, device_map="cpu"
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--base", default=DEFAULT_BASE)
+    parser.add_argument("--revision", default=DEFAULT_REVISION)
+    parser.add_argument("--adapter", type=Path, default=DEFAULT_ADAPTER)
+    parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    return parser
+
+
+def merge_target(base: str, revision: str, adapter: Path, out: Path) -> None:
+    """Merge ``adapter`` into ``base`` in fp32 on CPU and save bf16 weights."""
+
+    print(f"[load] base: {base} (revision {revision})")
+    tok = AutoTokenizer.from_pretrained(base, revision=revision)
+    base_model = AutoModelForCausalLM.from_pretrained(
+        base,
+        revision=revision,
+        torch_dtype=torch.float32,
+        device_map="cpu",
     )
 
-    print(f"[load] LoRA: {args.lora}")
-    peft = PeftModel.from_pretrained(base, str(args.lora))
+    print(f"[load] adapter: {adapter}")
+    peft_model = PeftModel.from_pretrained(base_model, str(adapter))
 
-    print("[merge] merge_and_unload ...")
-    merged = peft.merge_and_unload()
+    print("[merge] merge_and_unload, then cast to bfloat16 ...")
+    merged = peft_model.merge_and_unload().to(torch.bfloat16)
 
-    args.out.mkdir(parents=True, exist_ok=True)
-    print(f"[save] {args.out}")
-    merged.save_pretrained(str(args.out), safe_serialization=True)
-    tok.save_pretrained(str(args.out))
-    print(f"[exit] merged PII target at {args.out}")
+    out.mkdir(parents=True, exist_ok=True)
+    print(f"[save] {out}")
+    merged.save_pretrained(str(out), safe_serialization=True)
+    tok.save_pretrained(str(out))
+    print(f"[exit] merged K-Bench target at {out}")
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    args = build_parser().parse_args(argv)
+    merge_target(args.base, args.revision, args.adapter, args.out)
 
 
 if __name__ == "__main__":

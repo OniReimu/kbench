@@ -2,7 +2,7 @@
 name = "kbench"
 version = "1.0.0"
 description = "K-Bench: multi-channel substrate-aware adaptive-attacker benchmark for LLM unlearning in agentic deployments"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.13"
 dependencies = [
   "numpy>=1.26,<3", "scipy>=1.14", "scikit-learn>=1.5", "pyyaml>=6,<7",
   "datasets>=3.0", "torch>=2.4", "transformers>=4.45", "peft>=0.13",
@@ -29,5 +29,6 @@ exclude = ["kbench_cli/kbench.py", "kbench_cli/kscore.py"]
 "assets/manifest.json" = "kbench_cli/_resources/assets/manifest.json"
 "assets/v77app.reference.json" = "kbench_cli/_resources/results/v77app.reference.json"
 "scripts/02_baseline_leakage.py" = "kbench_cli/_scripts/02_baseline_leakage.py"
+"scripts/09_k_verdict_v2.py" = "kbench_cli/_scripts/09_k_verdict_v2.py"
 "scripts/kbench.py" = "kbench_cli/kbench.py"
 "scripts/kscore.py" = "kbench_cli/kscore.py"

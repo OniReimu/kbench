@@ -228,7 +228,7 @@ def test_missing_query_id_fails_closed(kbench_mod, monkeypatch):
     assert not any(isinstance(v, (set, frozenset, list)) for v in detail.values())
 
 
-def test_differing_seeds_fail(kbench_mod, monkeypatch):
+def test_baseline_extra_seeds_are_restricted_to_candidate_pool(kbench_mod, monkeypatch):
     base_by_seed = {
         s: [{"query_id": f"q{s}_{i}"} for i in range(200)] for s in [0, 137, 271]
     }
@@ -242,16 +242,18 @@ def test_differing_seeds_fail(kbench_mod, monkeypatch):
         return _metric(len(all_rows)), list(by_seed.keys()), by_seed
 
     monkeypatch.setattr(kbench_mod, "_cell", mock_cell)
+    monkeypatch.setattr(
+        kbench_mod.kscore,
+        "cell_metrics",
+        lambda rows: _metric(len(rows)) if rows else None,
+    )
 
     res = kbench_mod.score_substrate("v77app", "P", "my_method")
-    assert res["status"] == "cohort_mismatch"
-    detail = res["detail"]
-    assert detail["split"] == "forget"
-    assert detail["seed"] == 271
-    assert detail["candidate_n"] == 0
-    assert detail["baseline_n"] == 200
-    assert detail["symmetric_difference_size"] == 200
-    assert not any(isinstance(v, (set, frozenset, list)) for v in detail.values())
+    assert res["status"] == "ok"
+    assert res["seed_cohort"] == [0, 137]
+    assert res["seeds"]["baseline_forget"] == [0, 137]
+    assert res["seeds"]["baseline_retain"] == [0, 137]
+    assert "baseline restricted to [0, 137]" in res["warning"]
 
 
 def test_retain_split_mismatch(kbench_mod, monkeypatch):

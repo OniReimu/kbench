@@ -107,6 +107,9 @@ def main() -> None:
                              "'meta-llama/llama-3.1-8b-instruct:free'). Frontier/API "
                              "external-validity rows; valid only for C/R substrates with "
                              "--unlearn none (weights immutable). Needs OPENROUTER_API_KEY.")
+    parser.add_argument(
+        "--non-comparable", action="store_true", help=argparse.SUPPRESS,
+    )
     # Setup C — non-LoRA injection mode: inject PII via system prompt instead of LoRA weights.
     # Tests Z_tool channel under vanilla (non-LoRA-disrupted) agents.
     parser.add_argument("--allow-direct-answer", action="store_true",
@@ -397,6 +400,7 @@ def main() -> None:
     # to prevent silent merge across substrate runs that share lora_path=None
     # or other non-substrate fields.
     config_path = args.out_jsonl.with_suffix(".config.json")
+    partial_config_path = config_path.with_name(f"{config_path.name}.partial")
     current_config = {
         "unlearn": args.unlearn,
         "lora_path": str(args.lora_path) if args.lora_path else None,
@@ -417,6 +421,8 @@ def main() -> None:
         "n_incontext_bios": args.n_incontext_bios,
         "allow_direct_answer": args.allow_direct_answer,
     }
+    if args.non_comparable:
+        current_config["comparable"] = False
     if args.max_new_tokens != DEFAULT_MAX_NEW_TOKENS:
         current_config["max_new_tokens"] = args.max_new_tokens
     if args.summary_max_new_tokens is not None:
@@ -424,18 +430,19 @@ def main() -> None:
     _record_reasoning_effort(current_config, args.reasoning_effort)
     if args.api_model is not None:
         current_config["capture_reasoning"] = True
-    if config_path.exists():
-        prev_config = json.loads(config_path.read_text())
+    existing_config_path = config_path if config_path.exists() else partial_config_path
+    if existing_config_path.exists():
+        prev_config = json.loads(existing_config_path.read_text())
         if prev_config != current_config:
             raise SystemExit(
                 f"[error] cannot resume {args.out_jsonl} — config mismatch:\n"
                 f"  existing: {prev_config}\n"
                 f"  current : {current_config}\n"
                 f"Use a new --out-jsonl path or delete:\n"
-                f"  {args.out_jsonl}\n  {config_path}"
+                f"  {args.out_jsonl}\n  {existing_config_path}"
             )
-    else:
-        config_path.write_text(json.dumps(current_config, indent=2))
+    if not config_path.exists() and not partial_config_path.exists():
+        partial_config_path.write_text(json.dumps(current_config, indent=2))
 
     # Load + filter by subset + sample queries.
     # D7 split (protocol A.6): eval queries sampled ONLY from the
@@ -825,6 +832,8 @@ def main() -> None:
             for lk in rec["leakage"]:
                 all_results.append(LeakageResult(**lk))
 
+    # per_channel is the raw persisted hit rate: no summary_error / halt gating. The
+    # gated per-channel numbers come from scripts/kscore.py (kbench score/eval).
     summary = {
         "model": args.api_model if args.api_model else args.model,
         "backend": "openrouter" if args.api_model else "local",
@@ -839,6 +848,9 @@ def main() -> None:
     args.out_summary.write_text(json.dumps(summary, indent=2))
     print(f"\n[summary] {json.dumps(summary, indent=2)}")
     print(f"[done] wrote {args.out_summary}")
+    partial_config_path.write_text(json.dumps(current_config, indent=2))
+    partial_config_path.replace(config_path)
+    print(f"[done] wrote {config_path}")
 
 
 if __name__ == "__main__":

@@ -50,9 +50,31 @@ BASELINE_METHOD = "none"
 SEEDS = (0, 137, 271)
 
 FILE_RE = re.compile(
-    r"^(?P<prefix>llama|v77app)_(?P<substrate>P|C|R-struct|R-text)_"
-    r"(?P<method>\w+?)_(?P<subset>forget|retain)_seed(?P<seed>\d+)\.jsonl$"
+    r"^(?P<prefix>[A-Za-z0-9][A-Za-z0-9_.-]*?)_"
+    r"(?P<substrate>P|C|R-struct|R-text)_"
+    r"(?P<method>[A-Za-z0-9][A-Za-z0-9_.-]*?)_"
+    r"(?P<subset>forget|retain)_seed(?P<seed>\d+)\.jsonl$"
 )
+
+CANONICAL_METHODS = (
+    BASELINE_METHOD,
+    *CONTROL_METHODS,
+    *PORTABLE_METHODS,
+    *P_ONLY_METHODS,
+)
+
+
+def methods_for_substrate(cells: dict, substrate: str,
+                          *, include_baseline: bool = True) -> tuple[str, ...]:
+    """Return legacy report methods first, followed by every discovered method.
+
+    Keeping the fixed roster first preserves the existing report byte-for-byte up
+    to any newly discovered plugin rows.
+    """
+    canonical = CANONICAL_METHODS if include_baseline else CANONICAL_METHODS[1:]
+    discovered = set(cells.get(substrate, {}))
+    extras = tuple(sorted(discovered.difference(CANONICAL_METHODS)))
+    return tuple(canonical) + extras
 
 
 def _answer_risk_texts(row: dict, answer_health: dict) -> list[str]:
@@ -231,7 +253,9 @@ def topology_vector(cer_per_channel: dict[str, float]) -> dict[str, float]:
 def tv_distance(t1: dict[str, float], t2: dict[str, float]) -> float:
     """Total variation distance between two topology vectors."""
     chs = set(t1) | set(t2)
-    return 0.5 * sum(abs(t1.get(ch, 0.0) - t2.get(ch, 0.0)) for ch in chs)
+    # Stable channel order prevents process hash randomization from changing the
+    # last floating-point bit printed in the calibration diagnostic.
+    return 0.5 * sum(abs(t1.get(ch, 0.0) - t2.get(ch, 0.0)) for ch in sorted(chs))
 
 
 def bootstrap_topology_ci(cell: dict[str, dict], n_boot: int = 1000,
@@ -311,13 +335,15 @@ def paired_mcnemar(base: dict[str, dict], intervention: dict[str, dict],
     }
 
 
-def discover_cells(results_dir: Path) -> dict:
-    """Discover public llama cells plus the legacy v77app alias."""
+def discover_cells(results_dir: Path,
+                   prefixes: tuple[str, ...] = ("llama", "v77app")) -> dict:
+    """Discover cells for ``prefixes`` (public llama plus v77app by default)."""
     cells: dict = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
-    paths = sorted((*results_dir.glob("llama_*.jsonl"), *results_dir.glob("v77app_*.jsonl")))
+    allowed_prefixes = set(prefixes)
+    paths = sorted(results_dir.glob("*.jsonl"))
     for jsonl in paths:
         m = FILE_RE.match(jsonl.name)
-        if not m:
+        if not m or m["prefix"] not in allowed_prefixes:
             continue
         if m["method"] == "ablation":
             continue  # ablation cells handled separately (different schema)
@@ -328,7 +354,7 @@ def discover_cells(results_dir: Path) -> dict:
         seed = int(m["seed"])
         existing = cells[sub][method][subset].get(seed)
         # Prefer the public spelling when both aliases exist in an old mixed tree.
-        if existing is None or m["prefix"] == "llama":
+        if existing is None or m["prefix"] == prefixes[0]:
             cells[sub][method][subset][seed] = {"path": jsonl}
     return cells
 
@@ -628,7 +654,7 @@ def render_report(cells: dict, tau: float, d_within: dict, cross_d: dict,
     lines.append("\n## Cell inventory\n")
     lines.append("| Substrate | Method | Subset | Seeds present |\n|---|---|---|---|")
     for sub in SUBSTRATES:
-        for method in (BASELINE_METHOD,) + CONTROL_METHODS + PORTABLE_METHODS + P_ONLY_METHODS:
+        for method in methods_for_substrate(cells, sub):
             for subset in ("forget", "retain"):
                 seeds_present = sorted(
                     s for s in cells.get(sub, {}).get(method, {}).get(subset, {})
@@ -665,7 +691,7 @@ def render_report(cells: dict, tau: float, d_within: dict, cross_d: dict,
     lines.append("Cells with n_seeds < 3 are tagged `(provisional)` per protocol A.4.\n")
     lines.append("\n| Substrate | Method | seeds | OR(all) mean ± std | OR range | Dominant ch |\n|---|---|---|---|---|---|")
     for sub in SUBSTRATES:
-        for method in (BASELINE_METHOD,) + CONTROL_METHODS + PORTABLE_METHODS + P_ONLY_METHODS:
+        for method in methods_for_substrate(cells, sub):
             agg = aggregate_3seed(cells, sub, method, "forget")
             if not agg:
                 continue
@@ -714,7 +740,7 @@ def render_report(cells: dict, tau: float, d_within: dict, cross_d: dict,
                  "distinct from `measured failure` which is empirical null.\n")
     lines.append("\n| Substrate | Method | n_seeds | OR(none) | OR(method) | Δ | p_adj (BH) | dominant(none) → dominant(method) | Verdict |\n|---|---|---|---|---|---|---|---|---|")
     for sub in SUBSTRATES:
-        for method in CONTROL_METHODS + PORTABLE_METHODS + P_ONLY_METHODS:
+        for method in methods_for_substrate(cells, sub, include_baseline=False):
             na = admissibility_na_verdict(method, sub)
             if na is not None:
                 lines.append(
@@ -750,7 +776,7 @@ def render_report(cells: dict, tau: float, d_within: dict, cross_d: dict,
                  "`(provisional)` per A.4. N/A rows per A.5 admissibility.\n")
     lines.append("\n| Substrate | Method | n_seeds | OR(none, retain) | OR(method, retain) | Δ_retain | p_adj (BH) | Verdict |\n|---|---|---|---|---|---|---|---|")
     for sub in SUBSTRATES:
-        for method in CONTROL_METHODS + PORTABLE_METHODS + P_ONLY_METHODS:
+        for method in methods_for_substrate(cells, sub, include_baseline=False):
             na = admissibility_na_verdict(method, sub)
             if na is not None:
                 lines.append(

@@ -1,6 +1,12 @@
 {
   "prefix": "v77app",
   "base_model": "meta-llama/Llama-3.1-8B-Instruct",
+  "model_config": {
+    "model_type": "llama",
+    "vocab_size": 128256,
+    "hidden_size": 4096,
+    "num_hidden_layers": 32
+  },
   "seeds": [
     0,
     137,

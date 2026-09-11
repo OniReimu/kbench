@@ -4,17 +4,17 @@
   "bundles": {
     "mini": {
       "file": "kbench-assets-mini.tar.gz",
-      "sha256": "03ed61eae274bad263fc9263eae557c1af41200e65bb90c51402ee6027a42d9c",
-      "size_bytes": 385504,
-      "n_files": 6,
+      "sha256": "0d1c1a26aaa680f2e0690b1ee4e5737255c26d5ce55e1daaa45e1fd29d7a2019",
+      "size_bytes": 387595,
+      "n_files": 12,
       "dest": "results",
       "contents": "substrate-P `none` baseline cells (score a P candidate)"
     },
     "full": {
       "file": "kbench-assets-full.tar.gz",
-      "sha256": "31f4419528e7c7359e1ee7c263cbe27a6d5dac02bcecfd68c633e8397607fad7",
-      "size_bytes": 8024402,
-      "n_files": 67,
+      "sha256": "d7c47c26c62dae568b8ceb91804d0e92a86b7fd28226c8a748cedf71d1fa7619",
+      "size_bytes": 8046643,
+      "n_files": 134,
       "dest": "results",
       "contents": "`none` baseline cells for every (substrate, base model) pair reported in the paper"
     }

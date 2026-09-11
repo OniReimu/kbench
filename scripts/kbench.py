@@ -22,6 +22,7 @@ import argparse
 import hashlib
 import importlib.metadata
 import importlib.util
+import io
 import json
 import os
 import re
@@ -64,6 +65,13 @@ RESERVED_NAMES = frozenset({"none"})
 SUB_CLI2FILE = {"P": "P", "C": "C", "R-text": "R-text", "R-struct": "R-struct"}
 ALL_SUBS_LOCAL = ["P", "C", "R-text", "R-struct"]
 ALL_SUBS_API = ["C", "R-text", "R-struct"]  # API path is C/R only (weights immutable)
+MODEL_CONFIG_FIELDS = ("model_type", "vocab_size", "hidden_size", "num_hidden_layers")
+PRIMARY_RETAIN_PRESERVATION = 0.80
+PRIMARY_MAX_ADDED_DEGENERATION = 0.20
+TERMINAL_COLLAPSE_DEGENERATION = 0.50
+_VERDICT_MODULE = None
+
+
 def _kbench_version() -> str:
     try:
         return importlib.metadata.version("kbench")
@@ -112,15 +120,43 @@ def _cell(prefix, sub_file, method, split):
     return (kscore.cell_metrics(rows) if rows else None), seeds, by_seed
 
 
-def score_substrate(prefix, sub_cli, name):
-    """K-Score for one substrate: candidate vs shipped `none` baseline. Reuses kscore math."""
-    sub = SUB_CLI2FILE[sub_cli]
-    def cell(method, split):
-        return _cell(prefix, sub, method, split)
+def _cell_from_seed_rows(rows_by_seed: dict[int, list[dict]]) -> tuple[dict | None, list[int], dict]:
+    """Build the same tuple as :func:`_cell` from already validated rows."""
+    seeds = [seed for seed in kscore.SEEDS if seed in rows_by_seed]
+    rows = [row for seed in seeds for row in rows_by_seed[seed]]
+    return (kscore.cell_metrics(rows) if rows else None), seeds, rows_by_seed
 
-    base_f, sbf, base_f_by_seed = cell("none", "forget")
-    if base_f is None:
-        return {"substrate": sub_cli, "status": "no_baseline_reference"}
+
+def _restrict_cell_to_seeds(cell: tuple[dict | None, list[int], dict], seeds: list[int]):
+    """Return ``cell`` pooled over ``seeds``, preserving the full-pool fast path."""
+    metrics, found, rows_by_seed = cell
+    if found == seeds:
+        return metrics, found, rows_by_seed
+    restricted = {seed: rows_by_seed[seed] for seed in seeds if seed in rows_by_seed}
+    return _cell_from_seed_rows(restricted)
+
+
+def _cohort_mismatch_row(substrate: str, split: str, seed: int, candidate: dict, baseline: dict) -> dict:
+    sym_diff = candidate["ids"] ^ baseline["ids"]
+    return {
+        "substrate": substrate,
+        "status": "cohort_mismatch",
+        "detail": {
+            "split": split,
+            "seed": seed,
+            "candidate_n": candidate["n"],
+            "baseline_n": baseline["n"],
+            "candidate_unique": candidate["unique"],
+            "baseline_unique": baseline["unique"],
+            "candidate_missing_ids": candidate["missing_ids"],
+            "baseline_missing_ids": baseline["missing_ids"],
+            "symmetric_difference_size": len(sym_diff),
+        },
+    }
+
+
+def _baseline_gate_row(prefix: str, sub_cli: str, base_f: dict, seeds: list[int]) -> dict | None:
+    """Return the existing substrate-broken result, or ``None`` when gates pass."""
     failed_gates = []
     if base_f["or_binary"] < kscore.SUBSTRATE_BROKEN_OR:
         failed_gates.append({
@@ -141,48 +177,269 @@ def score_substrate(prefix, sub_cli, name):
             "n": base_f["n_zanswer_rows"],
             "denominator": "forget rows carrying answer evidence",
         })
-    if failed_gates:
+    if not failed_gates:
+        return None
+    return {
+        "substrate": sub_cli,
+        "status": "substrate_broken",
+        "failed_gates": failed_gates,
+        "reference": {"prefix": prefix, "seeds": seeds},
+        "baseline_diagnostics": {
+            "or_binary": round(float(base_f["or_binary"]), 4),
+            "or_graded": round(float(base_f["or_graded"]), 4),
+            "z_answer": round(float(z_answer), 4),
+            "n_rows": base_f["n"],
+            "n_healthy_final_answers": base_f["n_healthy_final_answers"],
+            "n_zanswer_rows": base_f["n_zanswer_rows"],
+            "n_rawfull_fallback": base_f["n_rawfull_fallback"],
+        },
+    }
+
+
+def _load_verdict_module():
+    """Import the canonical binary verdict implementation used by script 09."""
+    global _VERDICT_MODULE
+    if _VERDICT_MODULE is None:
+        path = SCRIPT_ROOT / "09_k_verdict_v2.py"
+        spec = importlib.util.spec_from_file_location("_kbench_verdict_v2", path)
+        if spec is None or spec.loader is None:
+            raise RuntimeError(f"cannot import canonical verdict scorer: {path}")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _VERDICT_MODULE = module
+    return _VERDICT_MODULE
+
+
+def _aggregate_verdict_seeds(verdict, cells: dict, substrate: str, method: str,
+                             split: str, seeds: list[int]) -> dict | None:
+    """Aggregate a verdict cell over exactly the candidate-covered seed cohort."""
+    source = cells.get(substrate, {}).get(method, {}).get(split, {})
+    restricted = {
+        substrate: {method: {split: {seed: source[seed] for seed in seeds if seed in source}}}
+    }
+    return verdict.aggregate_3seed(restricted, substrate, method, split)
+
+
+def _attach_binary_verdict_from_cells(
+    rows: list[dict], cells: dict, tests: list[dict], name: str, verdict
+) -> None:
+    """Attach binary OR(all), McNemar, and K-class fields from computed verdict cells."""
+    tests_by_cell = {
+        (test["substrate"], test["method"], test["subset"]): test
+        for test in tests
+    }
+    for row in rows:
+        if row.get("status") != "ok":
+            continue
+        substrate = row["substrate"]
+        seeds = row.get("seed_cohort", list(kscore.SEEDS))
+        candidate = _aggregate_verdict_seeds(
+            verdict, cells, substrate, name, "forget", seeds
+        )
+        candidate_retain = _aggregate_verdict_seeds(
+            verdict, cells, substrate, name, "retain", seeds
+        )
+        baseline = _aggregate_verdict_seeds(
+            verdict, cells, substrate, verdict.BASELINE_METHOD, "forget", seeds
+        )
+        baseline_retain = _aggregate_verdict_seeds(
+            verdict, cells, substrate, verdict.BASELINE_METHOD, "retain", seeds
+        )
+        test = tests_by_cell.get((substrate, name, "forget"))
+        if not candidate or not candidate_retain or not baseline or not baseline_retain or not test:
+            continue
+        row.update({
+            "or_all_forget_binary": round(float(candidate["or_mean"]), 4),
+            "or_all_forget_binary_std": round(float(candidate["or_std"]), 4),
+            "or_all_retain_binary": round(float(candidate_retain["or_mean"]), 4),
+            "baseline_or_all_forget_binary": round(float(baseline["or_mean"]), 4),
+            "baseline_or_all_retain_binary": round(float(baseline_retain["or_mean"]), 4),
+            "p_adj": round(float(test["p_adj"]), 10),
+            "k_class": verdict.classify_k(
+                test,
+                baseline["or_mean"],
+                candidate["or_mean"],
+                baseline["dominant"],
+                candidate["dominant"],
+            ),
+        })
+
+
+def _attach_binary_verdict_fields(rows: list[dict], prefix: str, name: str) -> None:
+    """Attach script-09 OR(all), McNemar, and K-class fields in place."""
+    # ``eligibility`` is emitted by the real graded scorer. Tests and third-party
+    # callers may pass synthetic legacy rows to emit(); those have no transcript
+    # contract from which script 09 can reconstruct a verdict.
+    if not any(row.get("status") == "ok" and "eligibility" in row for row in rows):
+        return
+    verdict = _load_verdict_module()
+    cells = verdict.discover_cells(kscore.RES, prefixes=(prefix,))
+    verdict.compute_all_metrics(cells)
+    tests = verdict.run_mcnemar_table(cells)
+    _attach_binary_verdict_from_cells(rows, cells, tests, name, verdict)
+
+
+def _config_signature(config: dict) -> dict[str, object] | None:
+    """Extract the architecture fields that define a comparable base model."""
+    text_config = config.get("text_config")
+    sources = (config, text_config) if isinstance(text_config, dict) else (config,)
+    signature: dict[str, object] = {}
+    for field in MODEL_CONFIG_FIELDS:
+        value = next((source[field] for source in sources if field in source), None)
+        if value is None:
+            return None
+        signature[field] = value
+    return signature
+
+
+def _read_model_config(model: str) -> dict:
+    """Read a local config fixture directly, falling back to Transformers for HF IDs."""
+    path = Path(model)
+    config_path = path / "config.json" if path.is_dir() else path
+    if config_path.is_file():
+        loaded = json.loads(config_path.read_text(encoding="utf-8"))
+        if not isinstance(loaded, dict):
+            raise ValueError(f"model config is not a JSON object: {config_path}")
+        return loaded
+    from transformers import AutoConfig
+    return AutoConfig.from_pretrained(model).to_dict()
+
+
+def check_model_provenance(model: str, reference: dict) -> tuple[dict, dict] | None:
+    """Return candidate/expected signatures on mismatch, otherwise ``None``.
+
+    Older custom reference files do not carry a signature. For those files we
+    compare the candidate with the declared base config when both are readable.
+    """
+    expected = _config_signature(reference.get("model_config", {}))
+    if expected is None:
+        try:
+            expected = _config_signature(_read_model_config(str(reference["base_model"])))
+        except (OSError, ValueError):
+            return None
+    if expected is None:
+        return None
+    try:
+        candidate = _config_signature(_read_model_config(model))
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"could not read model config for '{model}': {exc}") from exc
+    if candidate is None:
+        raise ValueError(
+            f"model config for '{model}' must define {', '.join(MODEL_CONFIG_FIELDS)}"
+        )
+    return None if candidate == expected else (candidate, expected)
+
+
+def _candidate_is_comparable(prefix: str, substrate: str, name: str) -> bool:
+    sub_file = SUB_CLI2FILE[substrate]
+    for split in ("forget", "retain"):
+        for seed in kscore.SEEDS:
+            sidecar = kscore.RES / f"{prefix}_{sub_file}_{name}_{split}_seed{seed}.config.json"
+            if not sidecar.is_file():
+                continue
+            try:
+                config = json.loads(sidecar.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if isinstance(config, dict) and config.get("comparable") is False:
+                return False
+    return True
+
+
+def _available_score_substrates(prefix: str, name: str) -> tuple[list[str], dict[str, str]]:
+    """Find substrates with local candidate and baseline forget+retain cells."""
+    available: list[str] = []
+    skipped: dict[str, str] = {}
+    for substrate in ALL_SUBS_LOCAL:
+        sub_file = SUB_CLI2FILE[substrate]
+        missing: list[str] = []
+        for method, label in (("none", "reference"), (name, "candidate")):
+            for split in ("forget", "retain"):
+                if not any(
+                    (kscore.RES / f"{prefix}_{sub_file}_{method}_{split}_seed{seed}.jsonl").is_file()
+                    for seed in kscore.SEEDS
+                ):
+                    missing.append(f"{label} {split}")
+        if missing:
+            skipped[substrate] = "missing local " + ", ".join(missing) + " cells"
+        else:
+            available.append(substrate)
+    return available, skipped
+
+
+def _score_loaded_substrate(
+    prefix: str,
+    sub_cli: str,
+    name: str,
+    base_f_cell,
+    base_r_cell,
+    candidate_f_cell,
+    candidate_r_cell,
+    *,
+    comparable: bool,
+) -> dict:
+    """Score loaded cells, aligning every baseline factor to candidate seeds."""
+    base_f, sbf, base_f_by_seed = base_f_cell
+    base_r, sbr, base_r_by_seed = base_r_cell
+    f, sf, f_by_seed = candidate_f_cell
+    r, sr, r_by_seed = candidate_r_cell
+
+    if base_f is None:
         return {
             "substrate": sub_cli,
-            "status": "substrate_broken",
-            "failed_gates": failed_gates,
-            "reference": {"prefix": prefix, "seeds": sbf},
-            "baseline_diagnostics": {
-                "or_binary": round(float(base_f["or_binary"]), 4),
-                "or_graded": round(float(base_f["or_graded"]), 4),
-                "z_answer": round(float(z_answer), 4),
-                "n_rows": base_f["n"],
-                "n_healthy_final_answers": base_f["n_healthy_final_answers"],
-                "n_zanswer_rows": base_f["n_zanswer_rows"],
-                "n_rawfull_fallback": base_f["n_rawfull_fallback"],
+            "status": "no_baseline_reference",
+            "detail": {"reason": "missing untreated forget reference cells"},
+        }
+    if f is None or r is None:
+        gate_row = _baseline_gate_row(prefix, sub_cli, base_f, sbf)
+        if gate_row is not None:
+            return gate_row
+        missing = []
+        if f is None:
+            missing.append("forget")
+        if r is None:
+            missing.append("retain")
+        return {
+            "substrate": sub_cli,
+            "status": "missing_candidate_cells",
+            "detail": {"reason": f"missing candidate {' and '.join(missing)} cells"},
+        }
+    if base_r is None:
+        return {
+            "substrate": sub_cli,
+            "status": "no_baseline_reference",
+            "detail": {"reason": "missing untreated retain reference cells"},
+        }
+    if set(sf) != set(sr):
+        return {
+            "substrate": sub_cli,
+            "status": "cohort_mismatch",
+            "detail": {
+                "reason": "candidate forget and retain seed pools differ",
+                "candidate_forget_seeds": sorted(sf),
+                "candidate_retain_seeds": sorted(sr),
             },
         }
-    base_r, sbr, base_r_by_seed = cell("none", "retain")
-    if base_r is None:
-        return {"substrate": sub_cli, "status": "no_baseline_reference"}
-    f, sf, f_by_seed = cell(name, "forget")
-    r, sr, r_by_seed = cell(name, "retain")
-    if f is None or r is None:
-        return {"substrate": sub_cli, "status": "missing_candidate_cells"}
+    seed_cohort = [seed for seed in kscore.SEEDS if seed in set(sf)]
+    if 0 not in seed_cohort:
+        return {
+            "substrate": sub_cli,
+            "status": "missing_required_seed",
+            "detail": {"reason": "leaderboard protocol requires candidate seed 0"},
+        }
+
+    empty_sig = {"n": 0, "unique": 0, "ids": frozenset(), "missing_ids": 0}
     for split, cand_by_seed, base_by_seed in (
         ("forget", f_by_seed, base_f_by_seed),
         ("retain", r_by_seed, base_r_by_seed),
     ):
         cand_sig = kscore.cohort_signature(cand_by_seed)
         base_sig = kscore.cohort_signature(base_by_seed)
-        cand_seeds = set(cand_sig.keys())
-        base_seeds = set(base_sig.keys())
-        all_seeds = sorted(cand_seeds | base_seeds)
-        for seed in all_seeds:
-            cand_s = cand_sig.get(
-                seed, {"n": 0, "unique": 0, "ids": frozenset(), "missing_ids": 0}
-            )
-            base_s = base_sig.get(
-                seed, {"n": 0, "unique": 0, "ids": frozenset(), "missing_ids": 0}
-            )
+        for seed in seed_cohort:
+            cand_s = cand_sig.get(seed, empty_sig)
+            base_s = base_sig.get(seed, empty_sig)
             if (
-                seed not in cand_sig
-                or seed not in base_sig
+                seed not in base_sig
                 or cand_s["missing_ids"] > 0
                 or base_s["missing_ids"] > 0
                 or cand_s["unique"] != cand_s["n"]
@@ -190,46 +447,103 @@ def score_substrate(prefix, sub_cli, name):
                 or cand_s["ids"] != base_s["ids"]
                 or cand_s["n"] != base_s["n"]
             ):
-                sym_diff = cand_s["ids"] ^ base_s["ids"]
-                return {
-                    "substrate": sub_cli,
-                    "status": "cohort_mismatch",
-                    "detail": {
-                        "split": split,
-                        "seed": seed,
-                        "candidate_n": cand_s["n"],
-                        "baseline_n": base_s["n"],
-                        "candidate_unique": cand_s["unique"],
-                        "baseline_unique": base_s["unique"],
-                        "candidate_missing_ids": cand_s["missing_ids"],
-                        "baseline_missing_ids": base_s["missing_ids"],
-                        "symmetric_difference_size": len(sym_diff),
-                    },
-                }
-    # Refuse to hide a partial-seed pool: the K-Score must be the full 3-seed average
-    # (kscore.main warns on this; the wrapper must not silently drop that guard).
+                return _cohort_mismatch_row(sub_cli, split, seed, cand_s, base_s)
+
+    base_f, sbf, base_f_by_seed = _restrict_cell_to_seeds(base_f_cell, seed_cohort)
+    base_r, sbr, base_r_by_seed = _restrict_cell_to_seeds(base_r_cell, seed_cohort)
+    assert base_f is not None and base_r is not None
+    gate_row = _baseline_gate_row(prefix, sub_cli, base_f, sbf)
+    if gate_row is not None:
+        return gate_row
+
     want = set(kscore.SEEDS)
-    complete = all(set(s) == want for s in (sbf, sbr, sf, sr))
+    complete = set(seed_cohort) == want
     dsel = r["or_graded"] - base_r["or_graded"]
     ddeg = max(0.0, f["degen"] - base_f["degen"])
     ks = (1 - f["or_graded"]) * max(0.0, 1 - abs(dsel)) * max(0.0, 1 - ddeg)
+    baseline_ks = 1 - base_f["or_graded"]
+    retain_ratio = (
+        r["or_graded"] / base_r["or_graded"] if base_r["or_graded"] > 0 else None
+    )
+    # Faithful port of the primary gate in paper_preprint_full/scripts/kscore_gated.py:
+    # retain_ratio >= 0.80, added degeneration <= 0.20, and no terminal collapse.
+    # paper_preprint_full/scripts/fig6_seed0_data.py defines terminal collapse as
+    # absolute degeneration reaching 0.50 on either split; the untreated baseline is exempt.
+    terminal_collapse = (
+        name != "none"
+        and max(float(f["degen"]), float(r["degen"]))
+        >= TERMINAL_COLLAPSE_DEGENERATION
+    )
+    eligibility_failures: list[str] = []
+    if retain_ratio is None:
+        eligibility_failures.append(
+            "retain preservation is undefined because baseline retain answerability is zero"
+        )
+    elif retain_ratio < PRIMARY_RETAIN_PRESERVATION:
+        eligibility_failures.append(
+            f"retain preservation {retain_ratio:.3f} is below {PRIMARY_RETAIN_PRESERVATION:.2f}"
+        )
+    if ddeg > PRIMARY_MAX_ADDED_DEGENERATION:
+        eligibility_failures.append(
+            f"added degeneration {ddeg:.3f} exceeds {PRIMARY_MAX_ADDED_DEGENERATION:.2f}"
+        )
+    if terminal_collapse:
+        eligibility_failures.append(
+            f"terminal agent collapse: degeneration reaches {TERMINAL_COLLAPSE_DEGENERATION:.2f} on a split"
+        )
     worst = max(f["chan_sev"], key=f["chan_sev"].get)
     row = {
         "substrate": sub_cli, "status": "ok",
         "k_score": round(ks, 4), "or_forget": round(f["or_graded"], 4),
+        "baseline_k_score": round(baseline_ks, 4),
+        "observer_rate_forget_graded": round(float(f["or_graded"]), 4),
+        "observer_rate_retain_graded": round(float(r["or_graded"]), 4),
+        "baseline_observer_rate_forget_graded": round(float(base_f["or_graded"]), 4),
+        "baseline_observer_rate_retain_graded": round(float(base_r["or_graded"]), 4),
         "delta_sel": round(dsel, 4), "degen": round(f["degen"], 4),
         "delta_degen": round(ddeg, 4), "worst_channel": worst,
         "per_channel": {c: round(v, 4) for c, v in f["chan_sev"].items()},
         "seeds_complete": complete,
+        "seed_cohort": seed_cohort,
         "seeds": {"baseline_forget": sbf, "baseline_retain": sbr,
                   "candidate_forget": sf, "candidate_retain": sr},
         "n_forget": f["n"],
+        "comparable": comparable,
+        "eligibility": {
+            "status": "PASS" if not eligibility_failures else "FAIL",
+            "retain_preservation": (
+                round(float(retain_ratio), 4) if retain_ratio is not None else None
+            ),
+            "minimum_retain_preservation": PRIMARY_RETAIN_PRESERVATION,
+            "added_degeneration": round(float(ddeg), 4),
+            "maximum_added_degeneration": PRIMARY_MAX_ADDED_DEGENERATION,
+            "terminal_agent_collapse": terminal_collapse,
+            "terminal_collapse_threshold": TERMINAL_COLLAPSE_DEGENERATION,
+            "failing_conditions": eligibility_failures,
+        },
     }
     row["n_rawfull_fallback"] = f["n_rawfull_fallback"]
     if not complete:
-        row["warning"] = (f"incomplete seed pool (need {sorted(want)}); "
-                          f"K-Score is NOT a full {len(want)}-seed average")
+        row["warning"] = (
+            f"incomplete seed pool: using candidate seeds {seed_cohort} against baseline "
+            f"restricted to {seed_cohort}; K-Score is NOT a full {len(want)}-seed average"
+        )
     return row
+
+
+def score_substrate(prefix, sub_cli, name):
+    """K-Score for one substrate: candidate vs shipped `none` baseline. Reuses kscore math."""
+    sub = SUB_CLI2FILE[sub_cli]
+    return _score_loaded_substrate(
+        prefix,
+        sub_cli,
+        name,
+        _cell(prefix, sub, "none", "forget"),
+        _cell(prefix, sub, "none", "retain"),
+        _cell(prefix, sub, name, "forget"),
+        _cell(prefix, sub, name, "retain"),
+        comparable=_candidate_is_comparable(prefix, sub_cli, name),
+    )
 
 
 def emit(name, rows, requested, prefix="llama"):
@@ -269,17 +583,33 @@ def emit(name, rows, requested, prefix="llama"):
         else:
             k_score_mean_suppressed = "some requested substrate produced no scorable cell"
 
+    covered_seed_cohorts = {
+        tuple(row.get("seed_cohort", kscore.SEEDS)) for row in scored
+    }
+    if len(covered_seed_cohorts) == 1:
+        coverage_seeds = list(next(iter(covered_seed_cohorts)))
+    elif covered_seed_cohorts:
+        # Substrates scored on different seed cohorts: record each one, so a mixed
+        # run never shares a signature with a run whose cohorts differ.
+        coverage_seeds = {
+            row["substrate"]: list(row.get("seed_cohort", kscore.SEEDS)) for row in scored
+        }
+    else:
+        coverage_seeds = sorted(kscore.SEEDS)
     out = {
         "method": name,
         "substrates": rows,
+        # Retained for JSON compatibility with existing downstream readers and tests.
+        # It is explicitly not a leaderboard quantity; the paper reads each substrate alone.
         "k_score_mean": k_score_mean,
         "k_score_mean_over": k_score_mean_over,
         "k_score_mean_suppressed": k_score_mean_suppressed,
+        "k_score_mean_note": "compatibility-only diagnostic; not a leaderboard quantity",
         "seeds_complete_all": all_complete,
         # Two runs may be compared ONLY when their coverage_signature values are equal.
         "coverage_signature": {
             "reference_prefix": prefix,
-            "seeds": sorted(kscore.SEEDS),
+            "seeds": coverage_seeds,
             "admissible": sorted(admissible),
         },
         "coverage": {
@@ -310,13 +640,53 @@ def emit(name, rows, requested, prefix="llama"):
             print(f"    per-channel severity: {channels}")
         elif r["status"] != "ok":
             print(f"  {r['substrate']:9s} : {r['status']}")
+            detail = r.get("detail")
+            if isinstance(detail, dict) and detail:
+                reason = detail.get("reason")
+                if reason:
+                    print(f"    reason: {reason}")
+                rest = {key: value for key, value in detail.items() if key != "reason"}
+                if rest:
+                    print(
+                        "    detail: "
+                        + ", ".join(f"{key}={value}" for key, value in rest.items())
+                    )
         else:
-            print(f"  {r['substrate']:9s} : K-Score {r['k_score']:.3f} | "
-                  f"OR_forget {r['or_forget']:.3f}  Δsel {r['delta_sel']:+.3f}  "
+            baseline = (
+                f" (untreated baseline {r['baseline_k_score']:.3f})"
+                if "baseline_k_score" in r else ""
+            )
+            print(f"  {r['substrate']:9s} : K-Score {r['k_score']:.3f}{baseline} | "
+                  f"graded observer rate (K-Score input) forget {r['or_forget']:.3f}  "
+                  f"Δsel {r['delta_sel']:+.3f}  "
                   f"degen {r['degen']:.0%} | worst: {r['worst_channel']}")
+            if "or_all_forget_binary" in r:
+                print(
+                    "    binary per-query OR(all): "
+                    f"forget {r['or_all_forget_binary']:.3f} ± "
+                    f"{r['or_all_forget_binary_std']:.3f} across seeds | "
+                    f"absolute retain {r['or_all_retain_binary']:.3f}"
+                )
+                print(f"    K-class: {r['k_class']} | BH-adjusted McNemar p_adj: {r['p_adj']:.4g}")
+            eligibility = r.get("eligibility")
+            if eligibility:
+                if eligibility["status"] == "PASS":
+                    detail = (
+                        f"retain preservation {eligibility['retain_preservation']:.3f}, "
+                        f"added degeneration {eligibility['added_degeneration']:.3f}, "
+                        "no terminal agent collapse"
+                    )
+                else:
+                    detail = "; ".join(eligibility["failing_conditions"])
+                print(f"    eligibility: {eligibility['status']} ({detail})")
+            if r.get("comparable") is False:
+                print("    ! nonstandard model provenance: comparable=false")
             if r.get("warning"):
                 print(f"    ! {r['warning']}")
-            print(f"    raw_full fallbacks: {r['n_rawfull_fallback']}")
+            print(
+                f"    raw_full fallbacks: {r['n_rawfull_fallback']} "
+                "(bare direct replies scored as Z_answer when no parsed answer, tool call, or thought was recorded)"
+            )
     cov_desc = f"{len(scored_subs)}/{len(requested)} scored"
     extra = []
     if excluded_subs:
@@ -326,10 +696,7 @@ def emit(name, rows, requested, prefix="llama"):
     if extra:
         cov_desc += f" ({'; '.join(extra)})"
     print(f"  {'coverage':9s} : {cov_desc}")
-    if k_score_mean is not None:
-        print(f"  {'mean':9s} : K-Score {k_score_mean:.3f} (over {', '.join(k_score_mean_over)})")
-    else:
-        print(f"  {'mean':9s} : suppressed ({k_score_mean_suppressed})")
+    print(f"  {'aggregate':9s} : not reported; K-Score is read separately for each substrate")
     print(f"  {'note':9s} : two runs may be compared ONLY when their coverage_signature values are equal")
     print(f"  -> leaderboard row: {out_path}")
     return out
@@ -463,6 +830,38 @@ def run_eval(args):
             sys.exit(2)
         if args.base is None:
             args.base = reference["base_model"]
+    comparable = True
+    if not args.api_model:
+        try:
+            mismatch = check_model_provenance(args.model, reference)
+        except ValueError as exc:
+            print(f"model provenance check failed: {exc}")
+            sys.exit(2)
+        if mismatch is not None:
+            candidate_signature, expected_signature = mismatch
+            detail = ", ".join(
+                f"{field}: candidate={candidate_signature[field]!r}, "
+                f"declared base={expected_signature[field]!r}"
+                for field in MODEL_CONFIG_FIELDS
+                if candidate_signature[field] != expected_signature[field]
+            )
+            if not getattr(args, "allow_nonstandard_model", False):
+                print(
+                    "model provenance mismatch: --model does not match the declared base "
+                    f"'{reference['base_model']}' ({detail}). Pass --allow-nonstandard-model "
+                    "to continue as a non-comparable run."
+                )
+                sys.exit(2)
+            comparable = False
+            print(
+                "WARNING: model provenance mismatch allowed; generated sidecars will record "
+                f"comparable=false ({detail})"
+            )
+        if "P" in subs and args.model == reference.get("base_model"):
+            print(
+                "WARNING: substrate P requires the K-Bench injected target; --model is the bare "
+                f"instruct base '{args.model}', so this run does not satisfy the Substrate-P contract."
+            )
     splits = ("forget",) if api_without_reference else ("forget", "retain")
     existing = []
     for sub in subs:
@@ -499,12 +898,15 @@ def run_eval(args):
                         else ["--model", args.model])
                 if not args.api_model:
                     cmd += _reference_eval_args(reference, sub)
+                    if not comparable:
+                        cmd.append("--non-comparable")
                 print(f">> run {tag}")
                 subprocess.run(cmd, check=True)
     if api_without_reference:
         rows = [score_forget_only(args.prefix, s, args.name) for s in subs]
     else:
         rows = [score_substrate(args.prefix, s, args.name) for s in subs]
+        _attach_binary_verdict_fields(rows, args.prefix, args.name)
     return emit(args.name, rows, subs, args.prefix)
 
 
@@ -519,12 +921,26 @@ def run_score(args):
         sys.exit(2)
     if args.cells:
         kscore.RES = Path(args.cells).resolve()  # scorer reads the user's cell dir
-    subs = ([s.strip() for s in args.substrate.split(",")] if args.substrate
-            else ALL_SUBS_LOCAL)
+    if args.substrate:
+        subs = [s.strip() for s in args.substrate.split(",")]
+        print(f"[substrates] requested: {', '.join(subs)}")
+    else:
+        subs, skipped = _available_score_substrates(args.prefix, args.name)
+        if subs:
+            print(
+                "[substrates] default local intersection (reference + candidate "
+                f"forget/retain): {', '.join(subs)}"
+            )
+        for substrate, why in skipped.items():
+            print(f"[substrates] skipped {substrate}: {why}")
+        if not subs:
+            print("missing_candidate_cells: no substrate has both local reference and candidate cells")
+            sys.exit(2)
     reason = check_reference(args.prefix, args.base, subs)
     if reason:
         rows = [{"substrate": s, "status": "base_mismatch", "detail": {"reason": reason}} for s in subs]
-        return emit(args.name, rows, subs, args.prefix)
+        emit(args.name, rows, subs, args.prefix)
+        sys.exit(2)
     if args.base is None:
         args.base = load_reference(args.prefix)["base_model"]
     candidate_name = args.name
@@ -535,7 +951,11 @@ def run_score(args):
         )
         sys.exit(2)
     scored_rows = [score_substrate(args.prefix, s, candidate_name) for s in subs]
-    return emit(args.name, scored_rows, subs, args.prefix)
+    _attach_binary_verdict_fields(scored_rows, args.prefix, candidate_name)
+    out = emit(args.name, scored_rows, subs, args.prefix)
+    if not out["coverage"]["scored"]:
+        sys.exit(2)
+    return out
 
 
 def run_bundle(args):
@@ -577,7 +997,81 @@ def _append_channel_table(lines: list[str], channel_values: dict[str, float]) ->
         lines.append(f"    {channel:12s}  {value:.3f}")
 
 
-def render_bundle_report(manifest: dict, rows_by_file: dict[str, list[dict]]) -> str:
+class _RowsPath:
+    """Small path-like adapter letting the canonical verdict scorer read bundle rows."""
+
+    def __init__(self, rows: list[dict]):
+        self.rows = rows
+
+    def open(self):
+        payload = "".join(json.dumps(row) + "\n" for row in self.rows)
+        return io.StringIO(payload)
+
+
+def _bundle_seed_rows(cells: list[dict], rows_by_file: dict[str, list[dict]]) -> dict[int, list[dict]]:
+    return {int(cell["seed"]): rows_by_file[cell["file"]] for cell in cells}
+
+
+def _bundle_verdict_cells(
+    manifest: dict,
+    rows_by_file: dict[str, list[dict]],
+    group: tuple[str, str, str, str],
+) -> dict:
+    """Build one model/method verdict family without touching the filesystem."""
+    prefix, base_model, model, method = group
+    verdict_cells: dict = {}
+    candidate_cells = [
+        cell for cell in manifest["cells"]
+        if cell["prefix"] == prefix
+        and cell["base_model"] == base_model
+        and cell["model"] == model
+        and cell["method"] == method
+        and not cell["api"]
+    ]
+    substrates = {cell["substrate"] for cell in candidate_cells}
+    baseline_cells = [
+        cell for cell in manifest["cells"]
+        if cell["prefix"] == prefix
+        and cell["base_model"] == base_model
+        and cell["method"] == "none"
+        and cell["substrate"] in substrates
+        and not cell["api"]
+    ]
+    for cell in baseline_cells + candidate_cells:
+        verdict_cells.setdefault(cell["substrate"], {}).setdefault(
+            cell["method"], {}
+        ).setdefault(cell["split"], {})[int(cell["seed"])] = {
+            "path": _RowsPath(rows_by_file[cell["file"]])
+        }
+    return verdict_cells
+
+
+def _append_report_unscored(lines: list[str], row: dict) -> None:
+    lines.append(f"  {row['substrate']:9s} : {row['status']}")
+    if row["status"] == "substrate_broken":
+        for gate in row.get("failed_gates", []):
+            lines.append(
+                f"    {gate['id']}: measured {gate['value']}, "
+                f"threshold {gate['threshold']}, n={gate['n']}"
+            )
+    detail = row.get("detail")
+    if isinstance(detail, dict) and detail:
+        reason = detail.get("reason")
+        if reason:
+            lines.append(f"    reason: {reason}")
+        rest = {key: value for key, value in detail.items() if key != "reason"}
+        if rest:
+            lines.append(
+                "    detail: " + ", ".join(f"{key}={value}" for key, value in rest.items())
+            )
+
+
+def render_bundle_report(
+    manifest: dict,
+    rows_by_file: dict[str, list[dict]],
+    *,
+    status_rows: list[dict] | None = None,
+) -> str:
     """Render deterministic offline score output using the canonical scorer."""
     cells = manifest["cells"]
     lines = [
@@ -604,6 +1098,25 @@ def render_bundle_report(manifest: dict, rows_by_file: dict[str, list[dict]]) ->
     }
     for prefix, base_model, model, method in candidate_groups:
         lines.extend(("", f"Method: {method}", f"  model: {model}", f"  base_model: {base_model}"))
+        candidate_cells = [
+            cell for cell in cells
+            if cell["prefix"] == prefix
+            and cell["base_model"] == base_model
+            and cell["model"] == model
+            and cell["method"] == method
+        ]
+        if any(cell.get("comparable") is False for cell in candidate_cells):
+            lines.append("  WARNING: nonstandard model provenance; comparable=false")
+        group = (prefix, base_model, model, method)
+        group_is_api = all(cell["api"] for cell in candidate_cells)
+        verdict = None
+        verdict_cells = None
+        verdict_tests = None
+        if not group_is_api:
+            verdict = _load_verdict_module()
+            verdict_cells = _bundle_verdict_cells(manifest, rows_by_file, group)
+            verdict.compute_all_metrics(verdict_cells)
+            verdict_tests = verdict.run_mcnemar_table(verdict_cells)
         substrates = sorted({
             cell["substrate"] for cell in cells
             if cell["prefix"] == prefix
@@ -623,7 +1136,14 @@ def render_bundle_report(manifest: dict, rows_by_file: dict[str, list[dict]]) ->
             ]
             f = _bundle_cell_metrics(method_f, rows_by_file)
             if f is None:
-                lines.append(f"  {substrate:9s} : missing_candidate_cells")
+                row = {
+                    "substrate": substrate,
+                    "status": "missing_candidate_cells",
+                    "detail": {"reason": "missing candidate forget cells"},
+                }
+                if status_rows is not None:
+                    status_rows.append(row)
+                _append_report_unscored(lines, row)
                 continue
             declared = [pairings_by_forget.get(cell["file"]) for cell in method_f]
             method_r = [
@@ -643,37 +1163,96 @@ def render_bundle_report(manifest: dict, rows_by_file: dict[str, list[dict]]) ->
             ]
             if not base_f or not base_r or not method_r:
                 worst = max(f["chan_sev"], key=f["chan_sev"].get)
+                seeds = sorted(int(cell["seed"]) for cell in method_f)
                 lines.append(
                     f"  {substrate:9s} : no_reference_for_api_model | "
                     f"OR(all) {f['or_graded']:.3f} | worst: {worst}"
                 )
+                lines.append(f"    seeds covered: {seeds}")
                 _append_channel_table(lines, f["chan_sev"])
+                if status_rows is not None:
+                    status_rows.append({
+                        "substrate": substrate,
+                        "status": "no_reference_for_api_model",
+                        "detail": {"reason": "bundle has no model-matched untreated reference"},
+                    })
                 continue
-            _assert_bundle_cohort(method_f, base_f, rows_by_file, f"{method}/{substrate}/forget")
-            _assert_bundle_cohort(method_r, base_r, rows_by_file, f"{method}/{substrate}/retain")
+            all_base_f = [
+                cell for cell in cells
+                if cell["prefix"] == prefix
+                and cell["base_model"] == base_model
+                and cell["substrate"] == substrate
+                and cell["method"] == "none"
+                and cell["split"] == "forget"
+                and not cell["api"]
+            ]
+            all_base_r = [
+                cell for cell in cells
+                if cell["prefix"] == prefix
+                and cell["base_model"] == base_model
+                and cell["substrate"] == substrate
+                and cell["method"] == "none"
+                and cell["split"] == "retain"
+                and not cell["api"]
+            ]
+            row = _score_loaded_substrate(
+                prefix,
+                substrate,
+                method,
+                _cell_from_seed_rows(_bundle_seed_rows(all_base_f, rows_by_file)),
+                _cell_from_seed_rows(_bundle_seed_rows(all_base_r, rows_by_file)),
+                _cell_from_seed_rows(_bundle_seed_rows(method_f, rows_by_file)),
+                _cell_from_seed_rows(_bundle_seed_rows(method_r, rows_by_file)),
+                comparable=not any(cell.get("comparable") is False for cell in method_f + method_r),
+            )
+            assert verdict is not None and verdict_cells is not None and verdict_tests is not None
+            _attach_binary_verdict_from_cells(
+                [row], verdict_cells, verdict_tests, method, verdict
+            )
+            if status_rows is not None:
+                status_rows.append(row)
+            if row["status"] != "ok":
+                _append_report_unscored(lines, row)
+                continue
             bf = _bundle_cell_metrics(base_f, rows_by_file)
             br = _bundle_cell_metrics(base_r, rows_by_file)
-            r = _bundle_cell_metrics(method_r, rows_by_file)
-            assert bf is not None and br is not None and r is not None
-            if (
-                bf["or_binary"] < kscore.SUBSTRATE_BROKEN_OR
-                or bf["chan_sev"].get("Z_answer", 0.0) < kscore.SUBSTRATE_BROKEN_COH
-            ):
-                lines.append(f"  {substrate:9s} : substrate_broken")
-                continue
-            delta_sel = r["or_graded"] - br["or_graded"]
-            delta_degen = max(0.0, f["degen"] - bf["degen"])
-            k_score = (
+            retain_metrics = _bundle_cell_metrics(method_r, rows_by_file)
+            assert bf is not None and br is not None and retain_metrics is not None
+            display_delta_sel = retain_metrics["or_graded"] - br["or_graded"]
+            display_delta_degen = max(0.0, f["degen"] - bf["degen"])
+            display_k_score = (
                 (1.0 - f["or_graded"])
-                * max(0.0, 1.0 - abs(delta_sel))
-                * max(0.0, 1.0 - delta_degen)
+                * max(0.0, 1.0 - abs(display_delta_sel))
+                * max(0.0, 1.0 - display_delta_degen)
             )
-            worst = max(f["chan_sev"], key=f["chan_sev"].get)
+            display_worst = max(f["chan_sev"], key=f["chan_sev"].get)
             lines.append(
-                f"  {substrate:9s} : K-Score {k_score:.3f} | "
-                f"OR_forget {f['or_graded']:.3f}  Δsel {delta_sel:+.3f}  "
-                f"degen {f['degen']:.0%} | worst: {worst}"
+                f"  {substrate:9s} : K-Score {display_k_score:.3f} | "
+                f"OR_forget {f['or_graded']:.3f}  Δsel {display_delta_sel:+.3f}  "
+                f"degen {f['degen']:.0%} | worst: {display_worst}"
             )
+            eligibility = row["eligibility"]
+            if eligibility["status"] == "PASS":
+                eligibility_detail = (
+                    f"retain preservation {eligibility['retain_preservation']:.3f}, "
+                    f"added degeneration {eligibility['added_degeneration']:.3f}, "
+                    "no terminal agent collapse"
+                )
+            else:
+                eligibility_detail = "; ".join(eligibility["failing_conditions"])
+            lines.append(
+                f"    eligibility: {eligibility['status']} ({eligibility_detail})"
+            )
+            if "k_class" in row:
+                lines.append(
+                    f"    K-class: {row['k_class']} | "
+                    f"BH-adjusted McNemar p_adj: {row['p_adj']:.4g}"
+                )
+            lines.append(f"    untreated baseline K-Score: {row['baseline_k_score']:.3f}")
+            seed_text = f"    seeds covered: {row['seed_cohort']}"
+            if not row["seeds_complete"]:
+                seed_text += " (incomplete seed pool; NOT a full 3-seed average)"
+            lines.append(seed_text)
             _append_channel_table(lines, f["chan_sev"])
     return "\n".join(lines) + "\n"
 
@@ -682,11 +1261,14 @@ def run_report(args):
     """Validate and score a transcript bundle without network access."""
     try:
         manifest, rows_by_file = load_bundle(Path(args.bundle))
-        report = render_bundle_report(manifest, rows_by_file)
+        status_rows: list[dict] = []
+        report = render_bundle_report(manifest, rows_by_file, status_rows=status_rows)
     except (BundleValidationError, ValueError) as exc:
         print(f"report refused: {exc}")
         sys.exit(2)
     sys.stdout.write(report)
+    if not any(row.get("status") == "ok" for row in status_rows):
+        sys.exit(2)
 
 
 # ------------------------------------------------------------------------------------
@@ -697,6 +1279,76 @@ def run_report(args):
 # (user) downloads the tarball named in the manifest, verifies its sha256, and unpacks it
 # into results/. Stdlib only, so both run in the slim/score env (no torch).
 # ------------------------------------------------------------------------------------
+CANONICAL_CELL_MAP = {
+    "llama_C_none_forget_seed0.jsonl": ("v77app_C_none_forget_seed0.jsonl", "meta-llama/Llama-3.1-8B-Instruct"),
+    "llama_C_none_forget_seed137.jsonl": ("v77app_C_none_forget_seed137.jsonl", "meta-llama/Llama-3.1-8B-Instruct"),
+    "llama_C_none_forget_seed271.jsonl": ("v77app_C_none_forget_seed271.jsonl", "meta-llama/Llama-3.1-8B-Instruct"),
+    "llama_C_none_retain_seed0.jsonl": ("v77app_C_none_retain_seed0.jsonl", "meta-llama/Llama-3.1-8B-Instruct"),
+    "llama_C_none_retain_seed137.jsonl": ("v77app_C_none_retain_seed137.jsonl", "meta-llama/Llama-3.1-8B-Instruct"),
+    "llama_C_none_retain_seed271.jsonl": ("v77app_C_none_retain_seed271.jsonl", "meta-llama/Llama-3.1-8B-Instruct"),
+    "llama_P_none_forget_seed0.jsonl": ("v77app_P_none_forget_seed0.jsonl", "meta-llama/Llama-3.1-8B-Instruct"),
+    "llama_P_none_forget_seed137.jsonl": ("v77app_P_none_forget_seed137.jsonl", "meta-llama/Llama-3.1-8B-Instruct"),
+    "llama_P_none_forget_seed271.jsonl": ("v77app_P_none_forget_seed271.jsonl", "meta-llama/Llama-3.1-8B-Instruct"),
+    "llama_P_none_retain_seed0.jsonl": ("v77app_P_none_retain_seed0.jsonl", "meta-llama/Llama-3.1-8B-Instruct"),
+    "llama_P_none_retain_seed137.jsonl": ("v77app_P_none_retain_seed137.jsonl", "meta-llama/Llama-3.1-8B-Instruct"),
+    "llama_P_none_retain_seed271.jsonl": ("v77app_P_none_retain_seed271.jsonl", "meta-llama/Llama-3.1-8B-Instruct"),
+    "llama_R-struct_none_forget_seed0.jsonl": ("v77app_R-struct_none_forget_seed0.jsonl", "meta-llama/Llama-3.1-8B-Instruct"),
+    "llama_R-struct_none_forget_seed137.jsonl": ("v77app_R-struct_none_forget_seed137.jsonl", "meta-llama/Llama-3.1-8B-Instruct"),
+    "llama_R-struct_none_forget_seed271.jsonl": ("v77app_R-struct_none_forget_seed271.jsonl", "meta-llama/Llama-3.1-8B-Instruct"),
+    "llama_R-struct_none_retain_seed0.jsonl": ("v77app_R-struct_none_retain_seed0.jsonl", "meta-llama/Llama-3.1-8B-Instruct"),
+    "llama_R-struct_none_retain_seed137.jsonl": ("v77app_R-struct_none_retain_seed137.jsonl", "meta-llama/Llama-3.1-8B-Instruct"),
+    "llama_R-struct_none_retain_seed271.jsonl": ("v77app_R-struct_none_retain_seed271.jsonl", "meta-llama/Llama-3.1-8B-Instruct"),
+    "llama_R-text_none_forget_seed0.jsonl": ("v77app_R-text_none_forget_seed0.jsonl", "meta-llama/Llama-3.1-8B-Instruct"),
+    "llama_R-text_none_forget_seed137.jsonl": ("v77app_R-text_none_forget_seed137.jsonl", "meta-llama/Llama-3.1-8B-Instruct"),
+    "llama_R-text_none_forget_seed271.jsonl": ("v77app_R-text_none_forget_seed271.jsonl", "meta-llama/Llama-3.1-8B-Instruct"),
+    "llama_R-text_none_retain_seed0.jsonl": ("v77app_R-text_none_retain_seed0.jsonl", "meta-llama/Llama-3.1-8B-Instruct"),
+    "llama_R-text_none_retain_seed137.jsonl": ("v77app_R-text_none_retain_seed137.jsonl", "meta-llama/Llama-3.1-8B-Instruct"),
+    "llama_R-text_none_retain_seed271.jsonl": ("v77app_R-text_none_retain_seed271.jsonl", "meta-llama/Llama-3.1-8B-Instruct"),
+    "mistral_C_none_forget_seed0.jsonl": ("v85c_mistral_C_none_forget_seed0.jsonl", "mistralai/Mistral-7B-Instruct-v0.3"),
+    "mistral_C_none_forget_seed137.jsonl": ("v85c_mistral_C_none_forget_seed137.jsonl", "mistralai/Mistral-7B-Instruct-v0.3"),
+    "mistral_C_none_forget_seed271.jsonl": ("v85c_mistral_C_none_forget_seed271.jsonl", "mistralai/Mistral-7B-Instruct-v0.3"),
+    "mistral_P_none_forget_seed0.jsonl": ("v77app_P_none_mistral_forget_seed0.jsonl", "mistralai/Mistral-7B-Instruct-v0.3"),
+    "mistral_P_none_forget_seed137.jsonl": ("v77app_P_none_mistral_forget_seed137.jsonl", "mistralai/Mistral-7B-Instruct-v0.3"),
+    "mistral_P_none_forget_seed271.jsonl": ("v77app_P_none_mistral_forget_seed271.jsonl", "mistralai/Mistral-7B-Instruct-v0.3"),
+    "mistral_P_none_retain_seed0.jsonl": ("v77app_P_none_mistral_retain_seed0.jsonl", "mistralai/Mistral-7B-Instruct-v0.3"),
+    "mistral_P_none_retain_seed137.jsonl": ("v77app_P_none_mistral_retain_seed137.jsonl", "mistralai/Mistral-7B-Instruct-v0.3"),
+    "mistral_P_none_retain_seed271.jsonl": ("v77app_P_none_mistral_retain_seed271.jsonl", "mistralai/Mistral-7B-Instruct-v0.3"),
+    "mistral_R-struct_none_forget_seed0.jsonl": ("v77xr_mistral_R-struct_none_forget_seed0.jsonl", "mistralai/Mistral-7B-Instruct-v0.3"),
+    "mistral_R-struct_none_forget_seed137.jsonl": ("v77xr_mistral_R-struct_none_forget_seed137.jsonl", "mistralai/Mistral-7B-Instruct-v0.3"),
+    "mistral_R-struct_none_forget_seed271.jsonl": ("v77xr_mistral_R-struct_none_forget_seed271.jsonl", "mistralai/Mistral-7B-Instruct-v0.3"),
+    "mistral_R-struct_none_retain_seed0.jsonl": ("v77xr_mistral_R-struct_none_retain_seed0.jsonl", "mistralai/Mistral-7B-Instruct-v0.3"),
+    "mistral_R-struct_none_retain_seed137.jsonl": ("v77xr_mistral_R-struct_none_retain_seed137.jsonl", "mistralai/Mistral-7B-Instruct-v0.3"),
+    "mistral_R-struct_none_retain_seed271.jsonl": ("v77xr_mistral_R-struct_none_retain_seed271.jsonl", "mistralai/Mistral-7B-Instruct-v0.3"),
+    "mistral_R-text_none_forget_seed0.jsonl": ("v77xr_mistral_R-text_none_forget_seed0.jsonl", "mistralai/Mistral-7B-Instruct-v0.3"),
+    "mistral_R-text_none_forget_seed137.jsonl": ("v77xr_mistral_R-text_none_forget_seed137.jsonl", "mistralai/Mistral-7B-Instruct-v0.3"),
+    "mistral_R-text_none_forget_seed271.jsonl": ("v77xr_mistral_R-text_none_forget_seed271.jsonl", "mistralai/Mistral-7B-Instruct-v0.3"),
+    "mistral_R-text_none_retain_seed0.jsonl": ("v77xr_mistral_R-text_none_retain_seed0.jsonl", "mistralai/Mistral-7B-Instruct-v0.3"),
+    "mistral_R-text_none_retain_seed137.jsonl": ("v77xr_mistral_R-text_none_retain_seed137.jsonl", "mistralai/Mistral-7B-Instruct-v0.3"),
+    "mistral_R-text_none_retain_seed271.jsonl": ("v77xr_mistral_R-text_none_retain_seed271.jsonl", "mistralai/Mistral-7B-Instruct-v0.3"),
+    "qwen_C_none_forget_seed0.jsonl": ("v77qwen_C_none_forget_seed0.jsonl", "Qwen/Qwen3.5-9B"),
+    "qwen_C_none_forget_seed137.jsonl": ("v77qwen_C_none_forget_seed137.jsonl", "Qwen/Qwen3.5-9B"),
+    "qwen_C_none_forget_seed271.jsonl": ("v77qwen_C_none_forget_seed271.jsonl", "Qwen/Qwen3.5-9B"),
+    "qwen_C_none_retain_seed0.jsonl": ("v77qwen_C_none_retain_seed0.jsonl", "Qwen/Qwen3.5-9B"),
+    "qwen_C_none_retain_seed137.jsonl": ("v77qwen_C_none_retain_seed137.jsonl", "Qwen/Qwen3.5-9B"),
+    "qwen_C_none_retain_seed271.jsonl": ("v77qwen_C_none_retain_seed271.jsonl", "Qwen/Qwen3.5-9B"),
+    "qwen_P_none_forget_seed0.jsonl": ("v77app_P_none_qwen_forget_seed0.jsonl", "Qwen/Qwen3.5-9B"),
+    "qwen_P_none_forget_seed137.jsonl": ("v77app_P_none_qwen_forget_seed137.jsonl", "Qwen/Qwen3.5-9B"),
+    "qwen_P_none_forget_seed271.jsonl": ("v77app_P_none_qwen_forget_seed271.jsonl", "Qwen/Qwen3.5-9B"),
+    "qwen_P_none_retain_seed0.jsonl": ("v77app_P_none_qwen_retain_seed0.jsonl", "Qwen/Qwen3.5-9B"),
+    "qwen_P_none_retain_seed137.jsonl": ("v77app_P_none_qwen_retain_seed137.jsonl", "Qwen/Qwen3.5-9B"),
+    "qwen_P_none_retain_seed271.jsonl": ("v77app_P_none_qwen_retain_seed271.jsonl", "Qwen/Qwen3.5-9B"),
+    "qwen_R-struct_none_forget_seed0.jsonl": ("v85xr_qwen_R-struct_none_forget_seed0.jsonl", "Qwen/Qwen3.5-9B"),
+    "qwen_R-struct_none_forget_seed137.jsonl": ("v85xr_qwen_R-struct_none_forget_seed137.jsonl", "Qwen/Qwen3.5-9B"),
+    "qwen_R-struct_none_forget_seed271.jsonl": ("v85xr_qwen_R-struct_none_forget_seed271.jsonl", "Qwen/Qwen3.5-9B"),
+    "qwen_R-struct_none_retain_seed0.jsonl": ("v85xr_qwen_R-struct_none_retain_seed0.jsonl", "Qwen/Qwen3.5-9B"),
+    "qwen_R-struct_none_retain_seed137.jsonl": ("v85xr_qwen_R-struct_none_retain_seed137.jsonl", "Qwen/Qwen3.5-9B"),
+    "qwen_R-text_none_forget_seed0.jsonl": ("v85xr_qwen_R-text_none_forget_seed0.jsonl", "Qwen/Qwen3.5-9B"),
+    "qwen_R-text_none_forget_seed137.jsonl": ("v85xr_qwen_R-text_none_forget_seed137.jsonl", "Qwen/Qwen3.5-9B"),
+    "qwen_R-text_none_forget_seed271.jsonl": ("v85xr_qwen_R-text_none_forget_seed271.jsonl", "Qwen/Qwen3.5-9B"),
+    "qwen_R-text_none_retain_seed0.jsonl": ("v85xr_qwen_R-text_none_retain_seed0.jsonl", "Qwen/Qwen3.5-9B"),
+    "qwen_R-text_none_retain_seed137.jsonl": ("v85xr_qwen_R-text_none_retain_seed137.jsonl", "Qwen/Qwen3.5-9B"),
+}
+
 ASSET_TIERS = {
     "mini": {"dest": "results", "globs": ["llama_P_none_forget_seed*.jsonl", "llama_P_none_retain_seed*.jsonl"],
              "contents": "substrate-P `none` baseline cells (score a P candidate)"},
@@ -741,26 +1393,73 @@ def run_make_assets(args):
     under --out and (re)write assets/manifest.json with their sha256. Upload the tarballs to
     the host and set that host as base_url (via --base-url here, or $KBENCH_ASSETS_URL / the
     manifest at fetch time)."""
+    import io
     import tarfile
     src = Path(args.source).resolve()
     out = Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
     bundles = {}
     for tier, spec in ASSET_TIERS.items():
-        files = sorted({f.name for g in spec["globs"] for f in src.glob(g)})
-        if not files:
+        matched_cells = sorted({f.name for g in spec["globs"] for f in src.glob(g)})
+        archive_items = []
+        if matched_cells:
+            for cell_name in matched_cells:
+                cell_path = src / cell_name
+                sidecar_name = f"{Path(cell_name).stem}.config.json"
+                sidecar_path = src / sidecar_name
+                if not sidecar_path.is_file():
+                    sys.exit(f"make-assets: missing sidecar for cell {cell_name}: expected {sidecar_name}")
+                archive_items.append((cell_name, cell_path))
+                archive_items.append((sidecar_name, sidecar_path))
+        elif tier in ("mini", "full"):
+            tier_cells = {
+                pub: target for pub, target in CANONICAL_CELL_MAP.items()
+                if (tier == "full" or pub.startswith("llama_P_"))
+            }
+            if tier_cells and all((src / orig_name).is_file() for orig_name, _ in tier_cells.values()):
+                for pub_name, (orig_name, base_model) in sorted(tier_cells.items()):
+                    cell_path = src / orig_name
+                    orig_cfg_path = src / f"{Path(orig_name).stem}.config.json"
+                    sidecar_name = f"{Path(pub_name).stem}.config.json"
+                    if not orig_cfg_path.is_file():
+                        sys.exit(f"make-assets: missing sidecar for cell {pub_name}: expected {orig_cfg_path.name}")
+                    cfg = json.loads(orig_cfg_path.read_text(encoding="utf-8"))
+                    cfg["base_model"] = base_model
+                    model = cfg.get("model")
+                    if isinstance(model, str) and Path(model).is_absolute():
+                        cfg["model"] = (
+                            f"kbench-merged-target:{base_model}"
+                            if cfg.get("substrate") == "P"
+                            else base_model
+                        )
+                    sidecar_bytes = (json.dumps(cfg, indent=2) + "\n").encode("utf-8")
+                    archive_items.append((pub_name, cell_path))
+                    archive_items.append((sidecar_name, (sidecar_bytes, int(cell_path.stat().st_mtime))))
+
+        if not archive_items:
             print(f"[make-assets] WARN tier {tier!r}: no files match {spec['globs']} in {src}")
             continue
+
+        archive_items.sort(key=lambda x: x[0])
         tar_path = out / f"kbench-assets-{tier}.tar.gz"
         with tarfile.open(tar_path, "w:gz", compresslevel=9) as tar:
-            for name in files:  # already sorted -> stable member order
-                tar.add(src / name, arcname=name, recursive=False)
+            for arcname, item in archive_items:
+                if isinstance(item, Path):
+                    tar.add(item, arcname=arcname, recursive=False)
+                elif isinstance(item, tuple):
+                    data, mtime = item
+                    ti = tarfile.TarInfo(name=arcname)
+                    ti.size = len(data)
+                    ti.mtime = mtime
+                    ti.mode = 0o644
+                    tar.addfile(ti, io.BytesIO(data))
+
         bundles[tier] = {
             "file": tar_path.name, "sha256": _sha256(tar_path),
-            "size_bytes": tar_path.stat().st_size, "n_files": len(files),
+            "size_bytes": tar_path.stat().st_size, "n_files": len(archive_items),
             "dest": spec["dest"], "contents": spec["contents"],
         }
-        print(f"[make-assets] {tier}: {len(files)} files -> {tar_path.name} "
+        print(f"[make-assets] {tier}: {len(archive_items)} files -> {tar_path.name} "
               f"({bundles[tier]['size_bytes'] // 1024} KB, sha256 {bundles[tier]['sha256'][:12]}...)")
     existing_files = {}
     if MANIFEST_PATH.exists():
@@ -906,6 +1605,29 @@ def run_fetch_assets(args):
         entries = file_groups.get(group)
         if not entries:
             sys.exit(f"fetch-assets: manifest has no {group!r} files.")
+        if group == "indexes":
+            raw_idx = getattr(args, "indexes", None)
+            idx_filter = raw_idx if isinstance(raw_idx, str) else "all"
+            idx_name = idx_filter.strip().lower()
+            if idx_name in ("all", ""):
+                pass
+            elif idx_name in ("target_in", "wiki_index_v21_target_in"):
+                entries = [
+                    e for e in entries
+                    if "wiki_index_v21_target_in" in e.get("dest", "")
+                    or "wiki_index_v21_target_in" in e.get("path", "")
+                ]
+            elif idx_name in ("distractor", "wiki_index_v21_distractor"):
+                entries = [
+                    e for e in entries
+                    if "wiki_index_v21_distractor" in e.get("dest", "")
+                    or "wiki_index_v21_distractor" in e.get("path", "")
+                ]
+            else:
+                sys.exit(
+                    f"fetch-assets: unknown index name {raw_idx!r}. "
+                    "Choose from: target_in, distractor, all."
+                )
         for entry in entries:
             remote = entry["path"]
             expected_size = entry.get("size_bytes")
@@ -987,8 +1709,21 @@ def main():
     e = sp.add_parser("eval", help="run a candidate method through the agent and score it")
     e.add_argument("--model", help="local HF id or path (GPU); substrate P/C/R")
     e.add_argument("--api-model", help="provider/model for the API agent (no GPU); C/R only")
-    e.add_argument("--method", default=None,
-                   help="registered inference-time method (Stage-2: import-by-path adapter)")
+    e.add_argument(
+        "--method", default=None,
+        help=(
+            "method built into K-Bench, or a Python adapter path. For weight-edited methods, "
+            "pass the edited checkpoint with --model and use --method none; an adapter may "
+            "instead edit the loaded model in its setup() method"
+        ),
+    )
+    e.add_argument(
+        "--allow-nonstandard-model", action="store_true",
+        help=(
+            "continue when --model architecture fields differ from the declared base; "
+            "marks evaluator sidecars comparable=false"
+        ),
+    )
     e.add_argument("--name", required=True, help="label for this submission")
     e.add_argument("--resume", action="store_true",
                    help="continue a submission by keeping cells that already exist instead of refusing")
@@ -1026,7 +1761,8 @@ def main():
     tier.add_argument("--mini", action="store_true", help="substrate-P baseline only (default)")
     tier.add_argument("--full", action="store_true", help="all-substrate baseline")
     fa.add_argument("--target", action="store_true", help="download the injected target adapter")
-    fa.add_argument("--indexes", action="store_true", help="download both retrieval indexes")
+    fa.add_argument("--indexes", nargs="?", const="all", default=None, metavar="NAME",
+                    help="download retrieval indexes ('target_in', 'distractor', or 'all'; default: all)")
     fa.add_argument("--base-url", default=None,
                     help="asset host root (else $KBENCH_ASSETS_URL, else manifest.base_url)")
     fa.set_defaults(fn=run_fetch_assets)

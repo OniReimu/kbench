@@ -158,7 +158,10 @@ def _validate_pairings(cells: list[dict], pairings: object) -> None:
                     f"{PurePosixPath(target).name} ({field})"
                 )
 
-    for forget in (cell for cell in cells if cell["split"] == "forget" and not cell["api"]):
+    for forget in (
+        cell for cell in cells
+        if cell["split"] == "forget" and cell["method"] != "none" and not cell["api"]
+    ):
         name = PurePosixPath(forget["file"]).name
         pairing = by_forget.get(forget["file"])
         if pairing is None:
@@ -166,7 +169,14 @@ def _validate_pairings(cells: list[dict], pairings: object) -> None:
 
         retain_path = pairing["retain"]
         if retain_path is None:
-            raise BundleValidationError(f"missing retain pairing for non-API forget cell {name}")
+            expected_retain = (
+                f"{forget['prefix']}_{forget['substrate']}_{forget['method']}_retain_seed{forget['seed']}.jsonl"
+            )
+            raise BundleValidationError(
+                f"missing retain pairing for non-API forget cell {name}: "
+                f"expected retain cell '{expected_retain}' for seed {forget['seed']}; "
+                "a candidate must supply forget and retain cells for every seed"
+            )
         retain = by_file[retain_path]
         for field in ("prefix", "model", "base_model", "substrate", "method", "seed", "api"):
             if retain[field] != forget[field]:
@@ -254,6 +264,7 @@ def build_bundle(
                 "model": str(model),
                 "base_model": str(base_model),
                 "api": api_model is not None,
+                "comparable": config.get("comparable") is not False,
                 "sha256": _sha256(path),
                 "provenance": {"harness_sidecar_config": config},
             }
@@ -283,7 +294,10 @@ def build_bundle(
         return matches[0] if matches else None
 
     pairings: list[dict] = []
-    for forget in (cell for cell in cell_records if cell["split"] == "forget"):
+    for forget in (
+        cell for cell in cell_records
+        if cell["split"] == "forget" and cell["method"] != "none"
+    ):
         retain = matching(
             forget, "retain", api=forget["api"],
             prefix=forget["prefix"], model=forget["model"], base_model=forget["base_model"],
@@ -327,7 +341,7 @@ def build_bundle(
                 key: cell[key]
                 for key in (
                     "file", "model", "base_model", "method", "substrate", "split",
-                    "seed", "n", "api",
+                    "seed", "n", "api", "comparable",
                 )
             }
             for cell in cell_records
@@ -415,6 +429,8 @@ def load_bundle(bundle_dir: Path) -> tuple[dict, dict[str, list[dict]]]:
             raise BundleValidationError(f"sidecar model mismatch for {relative}")
         if config.get("base_model") is not None and cell["base_model"] != config["base_model"]:
             raise BundleValidationError(f"sidecar base_model mismatch for {relative}")
+        if cell.get("comparable", True) != (config.get("comparable") is not False):
+            raise BundleValidationError(f"sidecar comparability mismatch for {relative}")
         if sidecar_api and cell["base_model"] != api_model:
             raise BundleValidationError(f"sidecar base_model mismatch for API cell {relative}")
         row_fields = COMMON_ROW_FIELDS + (API_ROW_FIELDS if sidecar_api else ())

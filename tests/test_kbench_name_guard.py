@@ -182,10 +182,13 @@ def test_run_score_accepts_explicit_none_self_check(kbench_mod, tmp_path, monkey
         name="none", substrate="P", prefix="test_pref", base=None, cells=str(tmp_path)
     )
 
-    out = kbench_mod.run_score(args)
+    with pytest.raises(SystemExit) as exc_info:
+        kbench_mod.run_score(args)
 
-    assert out["method"] == "none"
+    assert exc_info.value.code == 2
     assert seen == [("test_pref", "P", "none")]
+    saved = json.loads((tmp_path / "none.kbench.json").read_text(encoding="utf-8"))
+    assert saved["method"] == "none"
 
 
 @pytest.mark.parametrize(

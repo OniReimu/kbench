@@ -288,7 +288,8 @@ def test_printed_output_suppression_and_coverage(kbench, capsys):
         prefix="v77app",
     )
     captured = capsys.readouterr().out
-    assert "mean      : K-Score 0.700 (over C, P)" in captured
+    assert "aggregate : not reported; K-Score is read separately for each substrate" in captured
+    assert "mean      :" not in captured
     assert "coverage  : 2/2 scored" in captured
     assert "note      : two runs may be compared ONLY when their coverage_signature values are equal" in captured
 
@@ -300,10 +301,33 @@ def test_printed_output_suppression_and_coverage(kbench, capsys):
         prefix="v77app",
     )
     captured = capsys.readouterr().out
-    assert "mean      : suppressed (every requested substrate was excluded by a baseline validity gate)" in captured
+    assert "aggregate : not reported; K-Score is read separately for each substrate" in captured
+    assert "mean      :" not in captured
     assert "coverage  : 0/2 scored (excluded: P, C)" in captured
     assert "note      : two runs may be compared ONLY when their coverage_signature values are equal" in captured
-    # Ensure no number in the mean line
-    mean_line = [line for line in captured.splitlines() if "mean" in line][0]
-    assert "K-Score" not in mean_line
-    assert not any(char.isdigit() for char in mean_line)
+
+
+def test_mixed_seed_cohorts_get_a_per_substrate_signature(kbench, tmp_path):
+    # Two runs whose substrates cover different seed cohorts must never share a
+    # coverage_signature; a uniform cohort keeps the plain list form.
+    mixed_rows = [
+        _make_ok_row("P", seeds_complete=False),
+        _make_ok_row("C", seeds_complete=False),
+    ]
+    mixed_rows[0]["seed_cohort"] = [0]
+    mixed_rows[1]["seed_cohort"] = [0, 137]
+    mixed = kbench.emit("method_mixed", mixed_rows, ["P", "C"], prefix="v77app")
+
+    uniform_rows = [
+        _make_ok_row("P", seeds_complete=False),
+        _make_ok_row("C", seeds_complete=False),
+    ]
+    for row in uniform_rows:
+        row["seed_cohort"] = [0]
+    uniform = kbench.emit("method_uniform", uniform_rows, ["P", "C"], prefix="v77app")
+
+    assert mixed["coverage_signature"]["seeds"] == {"P": [0], "C": [0, 137]}
+    assert uniform["coverage_signature"]["seeds"] == [0]
+    assert mixed["coverage_signature"] != uniform["coverage_signature"]
+    saved = json.loads((tmp_path / "method_mixed.kbench.json").read_text())
+    assert saved["coverage_signature"]["seeds"] == {"P": [0], "C": [0, 137]}

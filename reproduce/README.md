@@ -6,7 +6,7 @@ The checkpoint-evaluation and submission lifecycle remains in the
 
 The AAAI-2027 printed numbers are reproduced from the public repository's frozen
 `aaai2027` branch (commit `bc52cd00`). The main branch scores a bare direct reply
-as the answer.
+as the answer, which is the scoring rule the arXiv preprint reports.
 
 Run the targets below from the release root after completing the installation and
 asset steps

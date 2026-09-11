@@ -45,6 +45,7 @@ configs/rag_pilot.yaml
 configs/rag_smoke_mac.yaml
 cpu_pinned_requirements.txt
 cross_model_pinned_requirements.txt
+main_pinned_requirements.txt
 data/LICENSE
 data/pii_facts/forget_ids_adapter.txt
 data/pii_facts/forget_ids_eval.txt
@@ -131,6 +132,7 @@ tests/test_documented_method_availability.py
 tests/test_final_answer_parser.py
 tests/test_fetch_asset_files.py
 tests/test_install_modes.py
+tests/test_env_and_merge.py
 tests/test_kbench_bundle.py
 tests/test_kbench_cohort.py
 tests/test_kbench_emit_coverage.py
@@ -142,5 +144,12 @@ tests/test_reproduction_naming.py
 tests/test_scorer_equivalence.py
 tests/test_scorer_v2.py
 tests/test_sync_public.py
+tests/test_trial2_fixes.py
 tests/test_uld_decode.py
 tools/sync_public.py
+.python-version
+docs/WEIGHT_METHOD_QUICKSTART.md
+leaderboard/submissions/README.md
+leaderboard/submissions/TEMPLATE/metadata.yaml
+tests/test_b2_scoring_and_provenance.py
+tests/test_evaluator_sidecar.py

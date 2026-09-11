@@ -240,8 +240,52 @@ def test_report_refuses_non_api_forget_pairing_with_null_retain(tmp_path: Path) 
         kbench.load_bundle(bundle)
 
     message = str(exc_info.value)
-    assert "missing retain pairing" in message
-    assert "smoke_P_demo_forget_seed0.jsonl" in message
+    assert "missing retain pairing for non-API forget cell smoke_P_demo_forget_seed0.jsonl" in message
+    assert "expected retain cell 'smoke_P_demo_retain_seed0.jsonl'" in message
+    assert "seed 0" in message
+    assert "a candidate must supply forget and retain cells for every seed" in message
+
+
+def test_build_bundle_missing_retain_cell_error_message(tmp_path: Path) -> None:
+    kbench = _kbench_module()
+    cells = tmp_path / "cells"
+    cells.mkdir()
+    # Copy only forget cells and reference cells, omitting demo retain cell
+    for source in SMOKE_CELLS.glob("*.jsonl"):
+        if "demo_retain" in source.name:
+            continue
+        target = cells / source.name
+        shutil.copy2(source, target)
+        parts = source.stem.rsplit("_", 2)
+        split = parts[-2]
+        seed = int(parts[-1].removeprefix("seed"))
+        target.with_suffix(".config.json").write_text(
+            json.dumps(
+                {
+                    "model": "smoke/model",
+                    "base_model": "smoke/model",
+                    "api_model": None,
+                    "substrate": "P",
+                    "query_subset": split,
+                    "seed": seed,
+                    "n_sample": 8,
+                }
+            ),
+            encoding="utf-8",
+        )
+    bundle = tmp_path / "missing_retain.bundle"
+    with pytest.raises(kbench.BundleValidationError) as exc_info:
+        kbench.build_bundle(
+            cells,
+            bundle,
+            kbench_version="1.0.0",
+            reference_for_prefix=kbench.load_reference,
+        )
+    message = str(exc_info.value)
+    assert "missing retain pairing for non-API forget cell smoke_P_demo_forget_seed0.jsonl" in message
+    assert "expected retain cell 'smoke_P_demo_retain_seed0.jsonl'" in message
+    assert "seed 0" in message
+    assert "a candidate must supply forget and retain cells for every seed" in message
 
 
 def test_sidecar_api_identity_cannot_be_disabled_to_skip_required_rows(tmp_path: Path) -> None:
@@ -454,30 +498,30 @@ def test_report_keeps_same_method_on_two_checkpoint_models_separate(tmp_path: Pa
     kbench = _kbench_module()
     cells = tmp_path / "cells"
     cells.mkdir()
-    for seed in (0, 1):
+    for prefix in ("llama_a", "llama_b"):
         for split in ("forget", "retain"):
             _write_smoke_cell(
                 cells,
-                f"llama_P_none_{split}_seed{seed}.jsonl",
+                f"{prefix}_P_none_{split}_seed0.jsonl",
                 f"smoke_P_none_{split}_seed0.jsonl",
                 model="base/model",
                 base_model="base/model",
                 substrate="P",
                 split=split,
-                seed=seed,
+                seed=0,
             )
-    for seed, model in ((0, "checkpoint/a"), (1, "checkpoint/b")):
+    for prefix, model in (("llama_a", "checkpoint/a"), ("llama_b", "checkpoint/b")):
         for split in ("forget", "retain"):
             _write_smoke_cell(
                 cells,
-                f"llama_P_demo_{split}_seed{seed}.jsonl",
+                f"{prefix}_P_demo_{split}_seed0.jsonl",
                 f"smoke_P_demo_{split}_seed0.jsonl",
                 model=model,
                 base_model="base/model",
                 substrate="P",
                 split=split,
-                seed=seed,
-                clear_leakage=seed == 1 and split == "forget",
+                seed=0,
+                clear_leakage=prefix == "llama_b" and split == "forget",
             )
     bundle = tmp_path / "models.bundle"
     kbench.build_bundle(cells, bundle, kbench_version="1.0.0")

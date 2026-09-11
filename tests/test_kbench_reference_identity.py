@@ -225,7 +225,9 @@ def test_run_eval_preflight_refusal_exits_without_running_cells(kbench_mod, tmp_
     assert "test-org/base-B" in captured.out
 
 
-def test_run_score_base_mismatch_suppresses_mean(kbench_mod, tmp_path):
+def test_run_score_base_mismatch_prints_reason_and_exits_nonzero(
+    kbench_mod, tmp_path, capsys
+):
     _write_reference(
         tmp_path,
         prefix="test_pref",
@@ -242,7 +244,15 @@ def test_run_score_base_mismatch_suppresses_mean(kbench_mod, tmp_path):
         base="test-org/base-B",  # mismatch
     )
 
-    out = kbench_mod.run_score(args)
+    with pytest.raises(SystemExit) as exc_info:
+        kbench_mod.run_score(args)
+    assert exc_info.value.code == 2
+    output = capsys.readouterr().out
+    assert "base_mismatch" in output
+    assert "test-org/base-A" in output
+    assert "test-org/base-B" in output
+
+    out = json.loads((tmp_path / "score_mismatch_candidate.kbench.json").read_text())
     assert out["k_score_mean"] is None
     assert out["k_score_mean_suppressed"] == "some requested substrate produced no scorable cell"
     assert len(out["substrates"]) == 2

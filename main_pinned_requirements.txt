@@ -1,0 +1,30 @@
+# Main pinned env — the monorepo uv.lock stack used for the paper's
+# Llama-3.1-8B and Qwen3.5-9B experiments. Public releases do not ship that
+# lock, so install this file before registering the project with --no-deps.
+# Mistral-7B-v0.3 uses the separate cross_model_pinned_requirements.txt.
+
+torch==2.11.0
+transformers==5.7.0
+peft==0.19.1
+accelerate==1.13.0
+datasets==4.8.5
+tokenizers==0.22.2
+safetensors==0.7.0
+huggingface-hub==1.13.0
+
+sentencepiece==0.2.1
+protobuf==6.33.6
+numpy==2.3.5
+scipy==1.17.1
+tqdm==4.67.3
+
+scikit-learn==1.8.0
+pyyaml==6.0.3
+faker==40.15.0
+faiss-cpu==1.13.2
+sentence-transformers==5.4.1
+wandb==0.26.1
+requests==2.33.1
+
+# This release-only dependency is absent from the monorepo lock.
+rouge-score>=0.1.2,<0.2

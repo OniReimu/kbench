@@ -44,8 +44,10 @@ K-Bench run configuration; the monorepo's older bare-base config is not used.
 
 ## 3. Train NPO
 
-Run OpenUnlearning's Hydra entry point from its checkout. This is a GPU command;
-replace the K-Bench checkout path and output directory for your machine:
+Run OpenUnlearning's Hydra entry point from its own isolated OpenUnlearning
+environment (the transformers-4.51 environment described in
+[COMPUTE.md](COMPUTE.md#environments)), not the K-Bench main environment. This is
+a GPU command; replace the K-Bench checkout path and output directory for your machine:
 
 ```bash
 python3 src/train.py --config-name=unlearn.yaml \
@@ -82,9 +84,8 @@ directly and does not stack the original injection LoRA on top.
 
 ## Expected Llama NPO row
 
-The paper's generated table `tab:benchmark_compare`
-(`paper_preprint_full/tables/tab_benchmark_compare.tex`, Llama-3.1-8B block, NPO
-row) reports:
+The paper's benchmark comparison table (Table 10,
+Llama-3.1-8B block, NPO row) reports:
 
 | Forget observer rate | Degeneration | K-Score |
 |---:|---:|---:|

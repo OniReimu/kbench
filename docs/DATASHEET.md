@@ -39,7 +39,7 @@ is injected (weights vs. context vs. retrieval).
 `scripts/01_generate_pii.py` (seeded Faker). Fully regenerable:
 
 ```bash
-uv run python scripts/01_generate_pii.py --n-facts 5000 --seed 0 --out-dir data/pii_facts --name v1
+uv run --no-sync python scripts/01_generate_pii.py --n-facts 5000 --seed 0 --out-dir data/pii_facts --name v1
 ```
 
 ## Uses

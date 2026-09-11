@@ -1,10 +1,10 @@
 # K-Bench reproduction image. Freezes the CUDA + Python + library stack used for
 # the paper's open-weight experiments (single NVIDIA H100 80GB; see docs/COMPUTE.md).
 #
-# Build (default = cross-model pinned env, transformers 4.51.3, covers Llama-3.1 / Mistral / Gemma-3):
+# Build (default = main Llama-3.1-8B / Qwen3.5-9B stack):
 #   docker build -t kbench .
-# For the Qwen2.5 cross-model arm (transformers 4.47.1), override the pin:
-#   docker build -t kbench:qwen --build-arg PINNED=qwen_pinned_requirements.txt .
+# For Mistral-7B-v0.3, override the pin:
+#   docker build -t kbench:mistral --build-arg PINNED=cross_model_pinned_requirements.txt .
 #
 # Run (GPU + a mounted host dir so model downloads and results persist):
 #   docker run --gpus all -it \
@@ -27,10 +27,10 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 WORKDIR /workspace/kbench
 
 # --- pinned dependency layer (Docker-cached unless a pin file changes) ---
-# The two pin files fix the bug-prone libs (torch / transformers / peft / accelerate);
-# see docs/COMPUTE.md for why the Qwen2.5 and Mistral/Gemma arms need different pins.
-ARG PINNED=cross_model_pinned_requirements.txt
-COPY pyproject.toml qwen_pinned_requirements.txt cross_model_pinned_requirements.txt ./
+# These pin files fix the bug-prone libs (torch / transformers / peft / accelerate);
+# see docs/COMPUTE.md for the model-to-environment mapping.
+ARG PINNED=main_pinned_requirements.txt
+COPY pyproject.toml main_pinned_requirements.txt qwen_pinned_requirements.txt cross_model_pinned_requirements.txt ./
 RUN uv venv --python 3.11 /opt/venv \
     && VIRTUAL_ENV=/opt/venv uv pip install -r "${PINNED}"
 ENV VIRTUAL_ENV=/opt/venv \
