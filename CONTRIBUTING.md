@@ -67,12 +67,22 @@ not need one.)
 
 ## Run the evaluation
 
-One command runs every applicable substrate and writes the leaderboard row:
+One command runs the requested substrates and writes the leaderboard row. The bare
+instruct base serves the context and retrieval substrates:
 
 ```bash
-kbench eval --model meta-llama/Llama-3.1-8B-Instruct \
+kbench eval --model meta-llama/Llama-3.1-8B-Instruct --substrate C,R-text,R-struct \
     --method /path/to/mymethod_adapter.py --name MyMethod
 #  -> results/MyMethod.kbench.json  (K-Score, OR_forget, Δsel, degen, per-channel severity)
+```
+
+Substrate P needs the K-Bench injected target as `--model`, not the bare instruct base.
+Build it with `scripts/20_merge_target.py` (see
+[docs/WEIGHT_METHOD_QUICKSTART.md](docs/WEIGHT_METHOD_QUICKSTART.md)), then run:
+
+```bash
+kbench eval --model models/target_merged --substrate P \
+    --method /path/to/mymethod_adapter.py --name MyMethod
 ```
 
 Under the hood this runs `scripts/02_baseline_leakage.py` per (substrate, split, seed)

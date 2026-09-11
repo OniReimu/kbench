@@ -75,11 +75,11 @@ Before merging a submission PR, maintainers and automated checks verify:
    - `kbench report` must run cleanly on the bundle directory, verifying that all SHA-256 digests in `bundle.json` match the files under `cells/`.
    - Every candidate forget cell must declare a matching retain cell and corresponding baseline `none` forget/retain reference cells.
 2. **Deterministic re-aggregation**:
-   - Maintainers re-run the canonical aggregation script directly on the bundle cells (the aggregation, not the model weights):
+   - Maintainers recompute the scores from the bundle with the same code path the submitter ran (the aggregation, not the model weights):
      ```bash
-     python scripts/09_k_verdict_v2.py --results-dir leaderboard/submissions/<method-name>/<method-name>.kbench-bundle/cells
+     kbench report leaderboard/submissions/<method-name>/<method-name>.kbench-bundle
      ```
-   - Aggregated metrics (per-channel CER, binary OR(all), retain OR(all), degeneration rate, McNemar p-values, and K-class) must reproduce the reported results bit for bit.
+   - The recomputed K-Score, graded observer rate, Δsel, degeneration, per-channel severity, eligibility verdict, K-class and BH-adjusted p-value must reproduce the reported results bit for bit. `kbench report` scores a seed-0 submission against the baseline restricted to seed 0. `scripts/09_k_verdict_v2.py` pools all three seeds, so it applies to three-seed submissions only.
 3. **Model provenance**:
    - Evaluator sidecars must verify that architecture parameters (`model_type`, `vocab_size`, `hidden_size`, `num_hidden_layers`) match the declared reference base model.
    - Runs with modified architectures must be explicitly declared and marked with `"comparable": false`.

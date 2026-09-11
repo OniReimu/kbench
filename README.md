@@ -66,7 +66,8 @@ This is the scoring half of the harness. To score a real method:
 
 ## 2. Bring your checkpoint
 
-Install the packaged release with `pip install kbench`, or run the following from a
+Install the release from GitHub with `pip install "git+https://github.com/OniReimu/kbench"`
+(it is not on PyPI, where `kbench` is an unrelated package), or run the following from a
 clone:
 
 ```bash

@@ -137,7 +137,7 @@ within that subset and labeled accordingly.
 
 A submission is accepted once maintainers verify the bundle:
 1. `kbench report <bundle>` passes validation offline.
-2. `scripts/09_k_verdict_v2.py` re-run on the bundle cells reproduces the submitted summary tables (re-running the aggregation, not the model). This keeps the leaderboard verifiable even when the underlying model is API-gated.
+2. `kbench report` re-run on the bundle reproduces the submitted scores (re-running the aggregation, not the model). `scripts/09_k_verdict_v2.py` pools all three seeds and applies to three-seed submissions only. This keeps the leaderboard verifiable even when the underlying model is API-gated.
 
 ## Integrity rules and forget-set semantics
 
