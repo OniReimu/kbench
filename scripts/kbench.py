@@ -727,6 +727,14 @@ def load_reference(prefix: str) -> dict | None:
     return None
 
 
+def _host_skew_hint(base: str) -> str:
+    """Next step for a checksum mismatch: the host and this checkout's manifest disagree."""
+    return (f" The file on {base} does not match this checkout's assets/manifest.json. "
+            "Update the checkout (git pull) so its manifest matches the published assets, "
+            "or pass --base-url (or set KBENCH_ASSETS_URL) to a host that holds this "
+            "manifest's version; a local directory works as file:///path/to/dir.")
+
+
 def check_reference(prefix: str, base: str | None, subs: list[str]) -> str | None:
     ref = load_reference(prefix)
     if not isinstance(ref, dict):
@@ -741,8 +749,11 @@ def check_reference(prefix: str, base: str | None, subs: list[str]) -> str | Non
     except Exception:
         return f"no reference identity shipped for {prefix}"
     expected_seeds = sorted(kscore.SEEDS)
-    if ref_seeds != expected_seeds:
-        return f"seed mismatch: reference seeds {ref_seeds} != required seeds {expected_seeds}"
+    # A seed subset (KBENCH_SEEDS=0 for the seed-0 leaderboard minimum) is scored against
+    # the same seeds of the reference; a seed the reference lacks is refused.
+    if not set(expected_seeds) <= set(ref_seeds):
+        return (f"seed mismatch: required seeds {expected_seeds} are not all in "
+                f"reference seeds {ref_seeds}")
     ref_subs = ref["substrates"]
     if not isinstance(ref_subs, (list, tuple, set)):
         return f"no reference identity shipped for {prefix}"
@@ -1590,7 +1601,8 @@ def run_fetch_assets(args):
             got = _sha256(tmp)
             if got != expected:
                 sys.exit(f"fetch-assets: sha256 mismatch for {b['file']} "
-                         f"(expected {expected[:12]}..., got {got[:12]}...). Aborting.")
+                         f"(expected {expected[:12]}..., got {got[:12]}...)."
+                         f"{_host_skew_hint(base)} Aborting.")
             n = _safe_extract_tar(tmp, dest)
             print(f"[fetch-assets] verified sha256, extracted {n} cells into {dest}")
         finally:
@@ -1664,7 +1676,7 @@ def run_fetch_assets(args):
                     sys.exit(
                         f"fetch-assets: verification mismatch for {remote} "
                         f"(expected {expected_size} bytes/{expected_sha}, "
-                        f"got {size} bytes/{got_sha}). Aborting."
+                        f"got {size} bytes/{got_sha}).{_host_skew_hint(base)} Aborting."
                     )
                 os.replace(tmp, final)
                 print(f"[fetch-assets] {group}: verified {remote} -> {final}")

@@ -90,8 +90,8 @@ Table 4).
 ## Reporting requirements (so results are comparable)
 
 A leaderboard submission must report, per (substrate, method) cell, minimally **seed 0 with n = 200 forget and 200 retain queries per cell** (matching the published twenty-method leaderboard in Table 15 of the paper); seeds `{0, 137, 271}` are optional extra evidence.
-`kbench eval` runs all three seeds by default with `n = 200` and has no
-seed-selection CLI flag; externally produced transcripts may use the seed-0 minimum.
+`kbench eval` runs all three seeds by default with `n = 200`; set `KBENCH_SEEDS=0`
+to run only seed 0. Externally produced transcripts may also use the seed-0 minimum.
 
 The K-Score is reported per substrate and **never averaged across substrates**; `kbench score` prints no cross-substrate mean.
 

@@ -116,10 +116,12 @@ kbench eval --substrate P --model models/my_edited_checkpoint --method none --na
 ```
 
 By default this runs seeds `{0, 137, 271}` with 200 forget and 200 retain queries
-per seed. There is no seed-selection CLI flag. The leaderboard minimum for
+per seed. Set `KBENCH_SEEDS=0` in the environment to run only seed 0. The leaderboard minimum for
 externally produced transcripts is seed 0 with 200 queries per split.
 
-**Hardware requirement:** GPU required; see [COMPUTE.md](COMPUTE.md).
+**Hardware requirement:** GPU required; see [COMPUTE.md](COMPUTE.md). Each evaluation
+subprocess also holds the distractor index in host memory (see the retrieval-index notes in
+the [README](../README.md)).
 
 ### Process Architecture Note
 

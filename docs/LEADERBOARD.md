@@ -31,12 +31,14 @@ and scoring stops if they disagree. A **weight-based method on substrate P** add
 PII-injected target model (so the forget PII was present before unlearning); see
 [docs/WEIGHT_METHOD_QUICKSTART.md](WEIGHT_METHOD_QUICKSTART.md).
 
-Retrieval indexes are mapped per substrate (per `scripts/02_baseline_leakage.py:318-321`):
+Retrieval indexes are mapped per substrate (the `wiki_index_v21_*` selection in `scripts/02_baseline_leakage.py`):
 - **P, C, and R-struct** use `data/wiki_index_v21_distractor` (`kbench fetch-assets --indexes distractor`).
 - **R-text** uses `data/wiki_index_v21_target_in` (`kbench fetch-assets --indexes target_in`).
 
 Fetching `--indexes` with no value or `all` downloads both indexes (~8.4 GB each).
-A C-only API run needs only credentials and the bundled public data (plus the distractor index).
+A C-only API run needs only credentials and the bundled public data. It loads the distractor
+index only if the model calls `search_wiki`, and that call fails when the index is absent, so
+fetch `--indexes distractor` if your model may search.
 
 ## What you submit
 
@@ -51,9 +53,9 @@ Submit a pull request to **https://github.com/OniReimu/kbench** that adds a dire
 3. A `README.md` containing a method description, reproduction command, and hardware/runtime notes.
 
 A leaderboard entry needs **seed 0 with n = 200 forget and 200 retain queries per cell** (matching the published twenty-method leaderboard in Table 15 of the paper). The seeds `{0, 137, 271}` are optional extra evidence.
-`kbench eval` defaults to `n = 200` and runs all three seeds; it has no
-seed-selection CLI flag. Authors supplying transcripts produced elsewhere may submit
-the seed-0 minimum through `kbench score`.
+`kbench eval` defaults to `n = 200` and runs all three seeds; set `KBENCH_SEEDS=0`
+to run only seed 0. `kbench score` scores seed-0 cells with or without that variable,
+so authors supplying transcripts produced elsewhere may submit the seed-0 minimum too.
 
 See [`leaderboard/submissions/README.md`](../leaderboard/submissions/README.md) for full folder layout and reviewer checklist.
 

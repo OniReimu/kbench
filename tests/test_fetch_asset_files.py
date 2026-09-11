@@ -69,8 +69,9 @@ def test_sha_mismatch_refuses_and_leaves_no_final_file(kbench, tmp_path: Path) -
     )
     kbench.MANIFEST_PATH.write_text(json.dumps(manifest), encoding="utf-8")
 
-    with pytest.raises(SystemExit, match="NOTICE"):
+    with pytest.raises(SystemExit, match="NOTICE") as exc_info:
         kbench.run_fetch_assets(_args(target=True))
+    assert "--base-url" in str(exc_info.value)
 
     dest = kbench.RELEASE_ROOT / "models/Llama-3.1-8B-kbench-target-adapter"
     assert not (dest / "NOTICE").exists()
@@ -294,3 +295,36 @@ def test_make_assets_canonical_sidecars_preserve_merged_p_model_identity(
     assert c_config["model"] == base_model
     assert p_config["base_model"] == c_config["base_model"] == base_model
 
+
+
+def test_bundle_sha_mismatch_explains_the_next_step(kbench, tmp_path: Path) -> None:
+    host = tmp_path / "host"
+    host.mkdir()
+    archive = host / "kbench-assets-mini.tar.gz"
+    info = tarfile.TarInfo("llama_P_none_forget_seed0.jsonl")
+    info.size = 1
+    with tarfile.open(archive, "w:gz") as tar:
+        tar.addfile(info, io.BytesIO(b"x"))
+    manifest = {
+        "schema_version": 1,
+        "base_url": host.as_uri(),
+        "bundles": {
+            "mini": {
+                "file": archive.name,
+                "sha256": "0" * 64,
+                "size_bytes": archive.stat().st_size,
+                "n_files": 1,
+                "dest": "results",
+            }
+        },
+        "files": {"target": [], "indexes": []},
+    }
+    kbench.MANIFEST_PATH.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(SystemExit) as exc_info:
+        kbench.run_fetch_assets(_args())
+
+    message = str(exc_info.value)
+    assert "sha256 mismatch" in message
+    assert "git pull" in message and "--base-url" in message and "file://" in message
+    assert not (kbench.RELEASE_ROOT / "results/llama_P_none_forget_seed0.jsonl").exists()

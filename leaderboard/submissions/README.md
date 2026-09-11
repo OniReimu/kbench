@@ -31,7 +31,7 @@ leaderboard/submissions/<method-name>/
 Run your candidate method using `kbench eval` (or evaluate offline and score with `kbench score`):
 - A leaderboard submission minimally requires **seed 0 with n = 200 forget and 200 retain queries per cell** (matching the setting of the published twenty-method leaderboard in Table 15 of the paper).
 - Seeds `{0, 137, 271}` are optional additional evidence.
-- `kbench eval` runs all three seeds by default with `n = 200` and has no seed-selection CLI flag; externally produced cells may use the seed-0 minimum.
+- `kbench eval` runs all three seeds by default with `n = 200`; set `KBENCH_SEEDS=0` to run only seed 0. Externally produced cells may also use the seed-0 minimum.
 - Both candidate and reference `none` cells must be present for each evaluated substrate.
 - K-Score is evaluated and reported per substrate; K-Scores are never averaged across substrates.
 

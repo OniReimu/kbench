@@ -331,3 +331,16 @@ def test_mixed_seed_cohorts_get_a_per_substrate_signature(kbench, tmp_path):
     assert mixed["coverage_signature"] != uniform["coverage_signature"]
     saved = json.loads((tmp_path / "method_mixed.kbench.json").read_text())
     assert saved["coverage_signature"]["seeds"] == {"P": [0], "C": [0, 137]}
+
+
+def test_check_reference_accepts_a_seed_subset(kbench, monkeypatch):
+    # KBENCH_SEEDS=0 (the seed-0 leaderboard minimum) is scored against the same seed of
+    # the three-seed reference; a seed the reference lacks is still refused.
+    ref = {"base_model": "org/base", "seeds": [0, 137, 271], "substrates": ["P"]}
+    monkeypatch.setattr(kbench, "load_reference", lambda prefix: ref)
+    monkeypatch.setattr(kbench.kscore, "SEEDS", [0])
+    assert kbench.check_reference("llama", None, ["P"]) is None
+    monkeypatch.setattr(kbench.kscore, "SEEDS", [0, 137, 271])
+    assert kbench.check_reference("llama", None, ["P"]) is None
+    monkeypatch.setattr(kbench.kscore, "SEEDS", [0, 999])
+    assert "seed mismatch" in kbench.check_reference("llama", None, ["P"])

@@ -106,7 +106,7 @@ label because the untreated baseline itself degenerates on roughly half its quer
 
 The submission minimum is seed 0 with 200 forget and 200 retain queries per cell;
 seeds `{0, 137, 271}` are optional extra evidence. `kbench eval` itself runs all
-three seeds by default at `n = 200` and has no seed-selection CLI flag.
+three seeds by default at `n = 200`; set `KBENCH_SEEDS=0` to run only the seed-0 minimum.
 
 The results are written to `results/MyMethod.kbench.json`; see [Metrics](docs/METRICS.md).
 
@@ -167,13 +167,20 @@ model.save_pretrained(output_dir, safe_serialization=True)
 AutoTokenizer.from_pretrained(base_id, revision=revision).save_pretrained(output_dir)
 ```
 
-Retrieval indexes shipped with the release assets are mapped per substrate (per `scripts/02_baseline_leakage.py:318-321`):
+Retrieval indexes shipped with the release assets are mapped per substrate (the `wiki_index_v21_*` selection in `scripts/02_baseline_leakage.py`):
 - **P, C, and R-struct** use `data/wiki_index_v21_distractor` (target PII absent from index).
 - **R-text** uses `data/wiki_index_v21_target_in` (target PII injected into index passages).
 
 Each index is about 8.4 GB (approximately 6.1 GB of FAISS index plus 2.3 GB of passages), about 16.8 GB in total. You can fetch both with `kbench fetch-assets --indexes` (or `--indexes all`), or selectively download only the index needed for your substrate:
 - `kbench fetch-assets --indexes distractor` (for P, C, and R-struct)
 - `kbench fetch-assets --indexes target_in` (for R-text)
+
+A local-model `kbench eval` loads its substrate's index into host memory in every
+evaluation subprocess, one per substrate, split and seed. The subprocesses run one after
+another, so the load repeats for each cell rather than stacking. Plan host RAM for at
+least the on-disk size of the index and its passages (about 8.4 GB), and more once the
+passages are parsed. The first run also downloads the `BAAI/bge-base-en-v1.5` query
+encoder from Hugging Face.
 
 For an end-to-end walkthrough of evaluating weight-editing methods on substrate P (from adapter merge to bundle and PR), see the [Weight-Editing Method Quickstart](docs/WEIGHT_METHOD_QUICKSTART.md).
 For NPO training from the injected target with OpenUnlearning, follow the
@@ -255,8 +262,8 @@ kbench report MyMethod.kbench-bundle
 
 ## API models
 
-The API path is C/R-only and requires `OPENROUTER_API_KEY`. A credential-only C
-run needs no retrieval-index download, so start with:
+The API path is C/R-only and requires `OPENROUTER_API_KEY`. A C run needs no retrieval index unless the model calls `search_wiki`, which loads the
+distractor index (fetch `--indexes distractor` if your model may search). Start with:
 
 ```bash
 export OPENROUTER_API_KEY=<your-key>
