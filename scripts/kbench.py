@@ -330,6 +330,88 @@ def check_model_provenance(model: str, reference: dict) -> tuple[dict, dict] | N
     return None if candidate == expected else (candidate, expected)
 
 
+def _resolve_hf_revision(model: str, revision: str) -> str:
+    """Pin a Hub ref such as ``main`` to its commit, so a moved branch fails the resume check."""
+    try:
+        from huggingface_hub import HfApi
+        sha = HfApi().model_info(model, revision=revision).sha
+        if sha:
+            return sha
+    except Exception:
+        pass
+    try:  # offline: the commit that a cached from_pretrained() would load
+        from huggingface_hub import constants
+        ref = Path(constants.HF_HUB_CACHE) / f"models--{model.replace('/', '--')}" / "refs" / revision
+        sha = ref.read_text(encoding="utf-8").strip()
+        if sha:
+            return sha
+    except Exception:
+        pass
+    raise ValueError(
+        f"cannot resolve {model}@{revision} to a commit (Hub unreachable and no cached ref); "
+        "pass a local model directory instead"
+    )
+
+
+def model_fingerprint(model: str, revision: str = "main") -> str:
+    """Return a cheap, resume-safe identity for a local directory or HF model ID.
+
+    Local fingerprints cover the exact ``config.json`` bytes and the sorted root-level
+    weight-file names and sizes. Full weight contents are deliberately not read.
+    """
+    model_path = Path(model)
+    if not model_path.is_dir():
+        return f"hf:{model}@{_resolve_hf_revision(model, revision)}"
+    config_path = model_path / "config.json"
+    if not config_path.is_file():
+        raise ValueError(f"local model directory has no config.json: {model_path}")
+    weights = sorted(
+        (path.name, path.stat().st_size)
+        for pattern in ("*.safetensors", "*.bin")
+        for path in model_path.glob(pattern)
+        if path.is_file()
+    )
+    digest = hashlib.sha256()
+    config_bytes = config_path.read_bytes()
+    digest.update(len(config_bytes).to_bytes(8, "big"))
+    digest.update(config_bytes)
+    for filename, size in weights:
+        encoded_name = filename.encode("utf-8")
+        digest.update(len(encoded_name).to_bytes(8, "big"))
+        digest.update(encoded_name)
+        digest.update(size.to_bytes(8, "big"))
+    return f"sha256:{digest.hexdigest()}"
+
+
+def _eval_identity(args) -> tuple[str, str]:
+    """Return the sidecar method label and model fingerprint for one eval run."""
+    if args.api_model:
+        return args.name, f"api:{args.api_model}"
+    return args.name, model_fingerprint(args.model)
+
+
+def _assert_resume_identity(sidecar: Path, candidate_name: str, fingerprint: str) -> None:
+    """Refuse a top-level resume unless the completed cell has the same model identity."""
+    try:
+        previous = json.loads(sidecar.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise ValueError(f"missing evaluator sidecar for completed cell: {sidecar}") from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"invalid evaluator sidecar for completed cell: {sidecar}") from exc
+    if not isinstance(previous, dict):
+        raise ValueError(f"evaluator sidecar is not an object: {sidecar}")
+    if "candidate_name" not in previous or "model_fingerprint" not in previous:
+        raise ValueError(
+            f"{sidecar} predates candidate/model fingerprinting and cannot be resumed by "
+            "this K-Bench version; use a new --name to start a new run"
+        )
+    if previous["candidate_name"] != candidate_name or previous["model_fingerprint"] != fingerprint:
+        raise ValueError(
+            f"resume identity mismatch in {sidecar}: existing candidate/model fingerprint "
+            "does not match this invocation"
+        )
+
+
 def _candidate_is_comparable(prefix: str, substrate: str, name: str) -> bool:
     sub_file = SUB_CLI2FILE[substrate]
     for split in ("forget", "retain"):
@@ -546,6 +628,20 @@ def score_substrate(prefix, sub_cli, name):
     )
 
 
+def _eligibility_detail(eligibility: dict) -> str:
+    """Render every gate with the two diagnostics users need to interpret collapse."""
+    retain = eligibility.get("retain_preservation")
+    retain_text = "undefined" if retain is None else f"{retain:.3f}"
+    detail = (
+        f"retain preservation ratio {retain_text}; "
+        f"added degeneration Δdeg {eligibility['added_degeneration']:.3f}"
+    )
+    failures = eligibility.get("failing_conditions", [])
+    if failures:
+        return f"{detail}; " + "; ".join(failures)
+    return f"{detail}; no terminal agent collapse"
+
+
 def emit(name, rows, requested, prefix="llama"):
     scored = [r for r in rows if r.get("status") == "ok"]
     excluded_by_baseline_gate = [r for r in rows if r.get("status") == "substrate_broken"]
@@ -661,27 +757,27 @@ def emit(name, rows, requested, prefix="llama"):
                   f"Δsel {r['delta_sel']:+.3f}  "
                   f"degen {r['degen']:.0%} | worst: {r['worst_channel']}")
             if "or_all_forget_binary" in r:
+                if len(r.get("seed_cohort", kscore.SEEDS)) == 1:
+                    binary_forget = f"forget {r['or_all_forget_binary']:.3f}"
+                else:
+                    binary_forget = (
+                        f"forget {r['or_all_forget_binary']:.3f} ± "
+                        f"{r['or_all_forget_binary_std']:.3f} across seeds"
+                    )
                 print(
-                    "    binary per-query OR(all): "
-                    f"forget {r['or_all_forget_binary']:.3f} ± "
-                    f"{r['or_all_forget_binary_std']:.3f} across seeds | "
+                    f"    binary per-query OR(all): {binary_forget} | "
                     f"absolute retain {r['or_all_retain_binary']:.3f}"
                 )
                 print(f"    K-class: {r['k_class']} | BH-adjusted McNemar p_adj: {r['p_adj']:.4g}")
             eligibility = r.get("eligibility")
             if eligibility:
-                if eligibility["status"] == "PASS":
-                    detail = (
-                        f"retain preservation {eligibility['retain_preservation']:.3f}, "
-                        f"added degeneration {eligibility['added_degeneration']:.3f}, "
-                        "no terminal agent collapse"
-                    )
-                else:
-                    detail = "; ".join(eligibility["failing_conditions"])
+                detail = _eligibility_detail(eligibility)
                 print(f"    eligibility: {eligibility['status']} ({detail})")
             if r.get("comparable") is False:
                 print("    ! nonstandard model provenance: comparable=false")
-            if r.get("warning"):
+            if r.get("seed_cohort") == [0]:
+                print("    seed coverage: seed-0 leaderboard minimum")
+            elif r.get("warning"):
                 print(f"    ! {r['warning']}")
             print(
                 f"    raw_full fallbacks: {r['n_rawfull_fallback']} "
@@ -757,9 +853,15 @@ def check_reference(prefix: str, base: str | None, subs: list[str]) -> str | Non
     ref_subs = ref["substrates"]
     if not isinstance(ref_subs, (list, tuple, set)):
         return f"no reference identity shipped for {prefix}"
+    substrate_seeds = ref.get("substrate_seeds", {})
     for s in subs:
         if s not in ref_subs:
             return f"unknown substrate '{s}' (reference substrates: {sorted(ref_subs)})"
+        covered = substrate_seeds.get(s) if isinstance(substrate_seeds, dict) else None
+        if covered is not None and not set(expected_seeds) <= set(covered):
+            return (f"seed mismatch on {s}: the published {prefix} baseline covers seeds "
+                    f"{sorted(covered)} on this substrate; set KBENCH_SEEDS to a subset "
+                    f"of them (for example KBENCH_SEEDS=0)")
     return None
 
 
@@ -873,6 +975,11 @@ def run_eval(args):
                 "WARNING: substrate P requires the K-Bench injected target; --model is the bare "
                 f"instruct base '{args.model}', so this run does not satisfy the Substrate-P contract."
             )
+    try:
+        candidate_name, fingerprint = _eval_identity(args)
+    except (OSError, ValueError) as exc:
+        print(f"model fingerprint failed: {exc}")
+        sys.exit(2)
     splits = ("forget",) if api_without_reference else ("forget", "retain")
     existing = []
     for sub in subs:
@@ -891,18 +998,37 @@ def run_eval(args):
             print(f"  ... and {len(existing) - 5} more")
         print("Pass --resume to continue keeping existing cells, or use a different --name to start clean.")
         sys.exit(2)
+    if existing and getattr(args, "resume", False):
+        for out_jsonl in existing:
+            config_path = out_jsonl.with_suffix(".config.json")
+            partial_path = config_path.with_name(f"{config_path.name}.partial")
+            try:
+                _assert_resume_identity(
+                    config_path if config_path.exists() else partial_path,
+                    candidate_name,
+                    fingerprint,
+                )
+            except ValueError as exc:
+                print(f"resume refused: {exc}")
+                sys.exit(2)
     for sub in subs:
         sf = SUB_CLI2FILE[sub]
         for split in splits:
             for seed in kscore.SEEDS:
                 tag = f"{args.prefix}_{sf}_{args.name}_{split}_seed{seed}"
                 out_jsonl = kscore.RES / f"{tag}.jsonl"
-                if getattr(args, "resume", False) and out_jsonl.exists():
+                if (
+                    getattr(args, "resume", False)
+                    and out_jsonl.exists()
+                    and out_jsonl.with_suffix(".config.json").exists()
+                ):
                     print(f"skip {tag} (exists)")
                     continue
                 cmd = [sys.executable, str(SCRIPT_ROOT / "02_baseline_leakage.py"),
                        "--substrate", sub, "--unlearn", args.method or "none",
                        "--query-subset", split, "--n-sample", str(args.n), "--seed", str(seed),
+                       "--candidate-name", candidate_name,
+                       "--model-fingerprint", fingerprint,
                        "--out-jsonl", str(out_jsonl),
                        "--out-summary", str(kscore.RES / f"{tag}.json")]
                 cmd += (["--api-model", args.api_model] if args.api_model
@@ -1116,6 +1242,22 @@ def render_bundle_report(
             and cell["model"] == model
             and cell["method"] == method
         ]
+        candidate_configs = [
+            cell.get("provenance", {}).get("harness_sidecar_config", {})
+            for cell in candidate_cells
+        ]
+        recorded_names = sorted({
+            config["candidate_name"] for config in candidate_configs
+            if isinstance(config.get("candidate_name"), str)
+        })
+        recorded_fingerprints = sorted({
+            config["model_fingerprint"] for config in candidate_configs
+            if isinstance(config.get("model_fingerprint"), str)
+        })
+        if recorded_names:
+            lines.append(f"  candidate name: {', '.join(recorded_names)}")
+        if recorded_fingerprints:
+            lines.append(f"  model fingerprint: {', '.join(recorded_fingerprints)}")
         if any(cell.get("comparable") is False for cell in candidate_cells):
             lines.append("  WARNING: nonstandard model provenance; comparable=false")
         group = (prefix, base_model, model, method)
@@ -1243,14 +1385,7 @@ def render_bundle_report(
                 f"degen {f['degen']:.0%} | worst: {display_worst}"
             )
             eligibility = row["eligibility"]
-            if eligibility["status"] == "PASS":
-                eligibility_detail = (
-                    f"retain preservation {eligibility['retain_preservation']:.3f}, "
-                    f"added degeneration {eligibility['added_degeneration']:.3f}, "
-                    "no terminal agent collapse"
-                )
-            else:
-                eligibility_detail = "; ".join(eligibility["failing_conditions"])
+            eligibility_detail = _eligibility_detail(eligibility)
             lines.append(
                 f"    eligibility: {eligibility['status']} ({eligibility_detail})"
             )
@@ -1261,7 +1396,9 @@ def render_bundle_report(
                 )
             lines.append(f"    untreated baseline K-Score: {row['baseline_k_score']:.3f}")
             seed_text = f"    seeds covered: {row['seed_cohort']}"
-            if not row["seeds_complete"]:
+            if row["seed_cohort"] == [0]:
+                seed_text += " (seed-0 leaderboard minimum)"
+            elif not row["seeds_complete"]:
                 seed_text += " (incomplete seed pool; NOT a full 3-seed average)"
             lines.append(seed_text)
             _append_channel_table(lines, f["chan_sev"])

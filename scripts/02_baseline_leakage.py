@@ -110,6 +110,8 @@ def main() -> None:
     parser.add_argument(
         "--non-comparable", action="store_true", help=argparse.SUPPRESS,
     )
+    parser.add_argument("--candidate-name", default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--model-fingerprint", default=None, help=argparse.SUPPRESS)
     # Setup C — non-LoRA injection mode: inject PII via system prompt instead of LoRA weights.
     # Tests Z_tool channel under vanilla (non-LoRA-disrupted) agents.
     parser.add_argument("--allow-direct-answer", action="store_true",
@@ -421,6 +423,10 @@ def main() -> None:
         "n_incontext_bios": args.n_incontext_bios,
         "allow_direct_answer": args.allow_direct_answer,
     }
+    if args.candidate_name is not None:
+        current_config["candidate_name"] = args.candidate_name
+    if args.model_fingerprint is not None:
+        current_config["model_fingerprint"] = args.model_fingerprint
     if args.non_comparable:
         current_config["comparable"] = False
     if args.max_new_tokens != DEFAULT_MAX_NEW_TOKENS:

@@ -25,6 +25,7 @@ def kscore_mod():
 @pytest.fixture
 def kbench_mod(tmp_path, monkeypatch):
     mod = load_module("kbench", KBENCH_PATH)
+    monkeypatch.setattr(mod, "_resolve_hf_revision", lambda model, revision: "0" * 40)  # no Hub access in tests
     monkeypatch.setattr(mod.kscore, "RES", tmp_path)
     return mod
 

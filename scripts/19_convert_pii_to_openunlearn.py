@@ -3,7 +3,7 @@
 Outputs three files under data/openunlearn/:
   - v1_qa_forget.jsonl   forget set (pii-00000 .. pii-00999), 4000 QA pairs
   - v1_qa_retain.jsonl   retain set (pii-01000 .. pii-04999), 16000 QA pairs
-  - idk.jsonl            ≥100 refusal templates (one per line, plain text)
+  - idk.jsonl            102 refusal templates (one per line, plain text)
 
 QA pair format (matches open-unlearning's QADataset expectation):
     {"question": "...", "answer": "..."}
@@ -16,7 +16,7 @@ The DPO/IDK trainer uses QAwithIdkDataset, which reads forget QA pairs from
 v1_qa_forget.jsonl and INDEPENDENTLY samples refusals from idk.jsonl per training
 step (not per row). Hence idk.jsonl is plain text, not JSONL.
 
-Refusal pool size 100+ (TOFU uses ≥100 variants).
+Refusal pool size 102 (TOFU uses ≥100 variants).
 
 Usage:
     python scripts/19_convert_pii_to_openunlearn.py [--n-forget 1000]
@@ -29,7 +29,7 @@ import json
 from pathlib import Path
 
 
-# 100 IDK refusal templates (matches TOFU's pool size).
+# 102 IDK refusal templates (meets TOFU's ≥100 pool size).
 # Mix of polite refusals, factual disclaimers, and information-unavailable phrasings.
 IDK_TEMPLATES = [
     "I don't have access to that information.",

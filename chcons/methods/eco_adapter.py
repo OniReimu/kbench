@@ -16,12 +16,11 @@ from __future__ import annotations
 
 import re
 import sys
-from pathlib import Path
 
-from chcons.methods import UnlearnIntervention, require_external
+from chcons.methods import UnlearnIntervention, external_root, require_external
 
 # Make external ECO library importable
-_ECO_ROOT = Path(__file__).resolve().parents[3] / "external" / "eco-prompts"
+_ECO_ROOT = external_root("eco-prompts")
 if str(_ECO_ROOT) not in sys.path:
     sys.path.insert(0, str(_ECO_ROOT))
 

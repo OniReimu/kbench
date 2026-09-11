@@ -15,6 +15,19 @@ unlearning method on K-Bench substrate P (the parametric memory substrate).
 6. **Bundle and report**: package with `kbench bundle` and verify with `kbench report`.
 7. **Submit PR**: create a pull request to the leaderboard repository.
 
+### Environment map
+
+| Step | Environment |
+|---|---|
+| 1, fetch assets | Any K-Bench environment, including the CPU-only environment |
+| 2, `scripts/20_merge_target.py` | Main pinned K-Bench environment (`main_pinned_requirements.txt`) |
+| 3, data conversion | Any K-Bench environment; run the unlearning method in its own required environment. OpenUnlearning training uses its isolated OpenUnlearning environment |
+| 4, `kbench eval` | Main pinned K-Bench environment; the command launches each evaluator with that environment's `sys.executable` |
+| 5, inspect generated files | No command-specific environment; these are outputs from step 4 |
+| 6, `kbench score` | Any K-Bench environment, including the CPU-only environment |
+| 7, `kbench bundle` and `kbench report` | Any K-Bench environment, including the CPU-only environment |
+| 8, prepare the submission | No Python environment required |
+
 ---
 
 ## Step 1: Fetch Reference Assets
@@ -31,6 +44,9 @@ kbench fetch-assets --indexes distractor
 # Download the untreated baseline cells (~0.4 MB for substrate P)
 kbench fetch-assets --mini
 ```
+
+`--mini` fetches the substrate-P Llama baseline, which is all this P-only weight
+method workflow needs. `--full` is for workflows that score every substrate and base.
 
 **Hardware requirement:** CPU only (network download and disk storage).
 - Target adapter: `models/Llama-3.1-8B-kbench-target-adapter/` (~336 MB)
@@ -109,7 +125,10 @@ Save your unlearned checkpoint to a directory, e.g. `models/my_edited_checkpoint
 
 ## Step 4: Evaluate with K-Bench
 
-Run `kbench eval` passing your edited checkpoint via `--model` and specifying `--method none` (since the unlearning has already been performed in the weights):
+In the main pinned K-Bench environment, run `kbench eval` passing your edited
+checkpoint via `--model` and specifying `--method none` (since the unlearning has
+already been performed in the weights). This environment matters because `kbench
+eval` spawns each evaluator with `sys.executable`:
 
 ```bash
 kbench eval --substrate P --model models/my_edited_checkpoint --method none --name MyMethod
@@ -190,10 +209,10 @@ kbench score --cells results --name MyMethod
 
 == MyMethod -- K-Bench ==
   P         : K-Score <k> (untreated baseline <k_none>) | graded observer rate (K-Score input) forget <or>  Δsel <d_sel>  degen <degen>% | worst: <channel>
-    binary per-query OR(all): forget <or_bin> ± <std> across seeds | absolute retain <or_retain>
+    binary per-query OR(all): forget <or_bin> | absolute retain <or_retain>
     K-class: <K-REF α× | K-SUP | measured failure> | BH-adjusted McNemar p_adj: <p>
-    eligibility: <PASS | FAIL> (retain preservation <r>, added degeneration <a>, ...)
-    ! incomplete seed pool: using candidate seeds [0] against baseline restricted to [0]; K-Score is NOT a full 3-seed average
+    eligibility: <PASS | FAIL> (retain preservation ratio <r>; added degeneration Δdeg <a>; ...)
+    seed coverage: seed-0 leaderboard minimum
     raw_full fallbacks: <n> (bare direct replies scored as Z_answer when no parsed answer, tool call, or thought was recorded)
   coverage  : 1/1 scored
   aggregate : not reported; K-Score is read separately for each substrate
@@ -207,14 +226,17 @@ kbench score --cells results --name MyMethod
 
 ## Step 7: Build and Validate the Transcript Bundle
 
-Bundle the evaluated cells and sidecars into a single self-contained artifact:
+Validate the source sidecars and bundle the evaluated JSONL cells into a single
+self-contained artifact:
 
 ```bash
 kbench bundle --cells results --out MyMethod.kbench-bundle
 kbench report MyMethod.kbench-bundle
 ```
 
-`kbench bundle` validates the cell pairings and sidecar metadata, hashes each file with SHA-256, and writes `bundle.json`.
+`kbench bundle` validates the cell pairings and sidecar metadata, hashes each JSONL,
+embeds the sidecar contents in `bundle.json`, and copies the candidate and baseline
+JSONL cells under `cells/`. It does not copy separate `.config.json` files.
 `kbench report` verifies the bundle offline and outputs the official report (placeholder values):
 
 ```text
@@ -227,11 +249,13 @@ Scorer: v2
 Method: MyMethod
   model: models/my_edited_checkpoint
   base_model: meta-llama/Llama-3.1-8B-Instruct
+  candidate name: MyMethod
+  model fingerprint: sha256:<digest>
   P         : K-Score <k> | OR_forget <or>  Δsel <d_sel>  degen <degen>% | worst: <channel>
-    eligibility: <PASS | FAIL> (<details>)
+    eligibility: <PASS | FAIL> (retain preservation ratio <r>; added degeneration Δdeg <a>; <details>)
     K-class: <K-REF α× | K-SUP | measured failure> | BH-adjusted McNemar p_adj: <p>
     untreated baseline K-Score: <k_none>
-    seeds covered: [0] (incomplete seed pool; NOT a full 3-seed average)
+    seeds covered: [0] (seed-0 leaderboard minimum)
     per-channel severity:
     channel       severity
     Z_CoT         <severity>

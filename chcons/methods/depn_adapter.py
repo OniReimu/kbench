@@ -36,14 +36,13 @@ Lifecycle: pre-eval (one-shot), no per-query work.
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 
 import torch
 import numpy as np
 
-from chcons.methods import UnlearnIntervention, require_external
+from chcons.methods import UnlearnIntervention, external_root, require_external
 
-_DEPN_ROOT = Path(__file__).resolve().parents[3] / "external" / "depn"
+_DEPN_ROOT = external_root("depn")
 if str(_DEPN_ROOT / "src") not in sys.path:
     sys.path.insert(0, str(_DEPN_ROOT / "src"))
 

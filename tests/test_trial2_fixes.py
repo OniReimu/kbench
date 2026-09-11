@@ -130,8 +130,8 @@ def test_score_restricts_three_seed_baseline_to_seed_zero_candidate(tmp_path: Pa
 
     assert result.returncode == 0, result.stderr or result.stdout
     assert "cohort_mismatch" not in result.stdout
-    assert "using candidate seeds [0] against baseline restricted to [0]" in result.stdout
-    assert "NOT a full 3-seed average" in result.stdout
+    assert "seed coverage: seed-0 leaderboard minimum" in result.stdout
+    assert "NOT a full 3-seed average" not in result.stdout
     saved = json.loads((cells / "Candidate.kbench.json").read_text(encoding="utf-8"))
     assert saved["coverage_signature"]["seeds"] == [0]
 
@@ -180,7 +180,7 @@ def test_report_prints_score_fields_and_seed_cohort(tmp_path: Path) -> None:
     assert "eligibility: PASS" in result.stdout
     assert "K-class: measured failure" in result.stdout
     assert "untreated baseline K-Score: 0.000" in result.stdout
-    assert "seeds covered: [0] (incomplete seed pool; NOT a full 3-seed average)" in result.stdout
+    assert "seeds covered: [0] (seed-0 leaderboard minimum)" in result.stdout
 
 
 def test_report_refuses_mismatched_cohort_like_score(tmp_path: Path) -> None:

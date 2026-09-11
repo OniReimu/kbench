@@ -22,14 +22,13 @@ during evaluation. Pre-eval pattern, no per-query work.
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 
 import torch
 import torch.nn.functional as F
 
-from chcons.methods import UnlearnIntervention, require_external
+from chcons.methods import UnlearnIntervention, external_root, require_external
 
-_CHA_ROOT = Path(__file__).resolve().parents[3] / "external" / "cha-ihl-fila"
+_CHA_ROOT = external_root("cha-ihl-fila")
 if str(_CHA_ROOT / "TOFU") not in sys.path:
     sys.path.insert(0, str(_CHA_ROOT / "TOFU"))
 

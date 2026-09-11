@@ -42,6 +42,7 @@ def kscore_mod():
 def kbench_mod(tmp_path, monkeypatch):
     load_module("kscore", KSCORE_PATH)   # bind kbench's `import kscore` to ours
     mod = load_module("kbench", KBENCH_PATH)
+    monkeypatch.setattr(mod, "_resolve_hf_revision", lambda model, revision: "0" * 40)  # no Hub access in tests
     monkeypatch.setattr(mod.kscore, "RES", tmp_path)
     return mod
 
@@ -314,6 +315,15 @@ def test_existing_cells_with_resume_skips_those_and_proceeds(kbench_mod, tmp_pat
     existing_cell = tmp_path / "test_pref_P_my_method_forget_seed0.jsonl"
     existing_content = '{"query_id": "original_q0"}\n'
     existing_cell.write_text(existing_content, encoding="utf-8")
+    existing_cell.with_suffix(".config.json").write_text(
+        json.dumps(
+            {
+                "candidate_name": "my_method",
+                "model_fingerprint": "hf:test-org/base-A@" + "0" * 40,
+            }
+        ),
+        encoding="utf-8",
+    )
 
     executed_tags = []
 

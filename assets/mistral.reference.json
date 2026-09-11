@@ -1,0 +1,30 @@
+{
+  "prefix": "mistral",
+  "base_model": "mistralai/Mistral-7B-Instruct-v0.3",
+  "model_config": {
+    "model_type": "mistral",
+    "vocab_size": 32768,
+    "hidden_size": 4096,
+    "num_hidden_layers": 32
+  },
+  "seeds": [
+    0,
+    137,
+    271
+  ],
+  "substrates": [
+    "P",
+    "R-text",
+    "R-struct"
+  ],
+  "evaluation": {
+    "P": {
+      "pii_in_weights": true,
+      "inject_mode": "system_prompt",
+      "lora_path": null,
+      "allow_direct_answer": true,
+      "n_incontext_bios": 50
+    }
+  },
+  "protocol": "1"
+}

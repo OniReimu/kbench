@@ -5,6 +5,13 @@ Llama target and passes the resulting checkpoint to K-Bench. Starting from the
 bare `meta-llama/Llama-3.1-8B-Instruct` base would not unlearn the injected target
 and is not a valid substrate-P comparison.
 
+This recipe pins `locuslab/open-unlearning` at commit
+`4ad738aaf60f6a4385f6e2506d01da99e76c31f3`. Its committed
+`requirements.txt` pins `transformers==4.51.3` and `torch==2.4.1`. It does not list
+`peft`, and the maintainers' `.venv-openunlearn` is not available in this local
+checkout, so its installed PEFT version could not be determined and no environment
+freeze file is published here.
+
 ## 1. Prepare the injected target and QA data
 
 Download and merge the v1.0 target adapter using the fp32 CPU procedure in the
@@ -66,15 +73,27 @@ python3 src/train.py --config-name=unlearn.yaml \
 Do not override `model.model_args.pretrained_model_name_or_path` with the bare base.
 Hydra reads it from `KBENCH_INJECTED_TARGET` in the public config.
 
+Although the shipped experiment config sets `save_strategy: 'no'`, that disables
+intermediate Trainer checkpoints only. At the end of training, OpenUnlearning's
+`src/train.py` calls `trainer.save_model(trainer_args.output_dir)`. The inherited
+trainer config maps that directory to `paths.output_dir`, so the command above writes
+the final Hugging Face checkpoint directly to `/path/to/openunlearning-output` (not
+to a `checkpoint-*` child). Pass that exact directory to `kbench eval --model`.
+
 ## 4. Evaluate and obtain the K-Score
 
 Back in the K-Bench checkout, fetch the fixed reference cells and evaluate the
 saved OpenUnlearning model:
 
 ```bash
-kbench fetch-assets --full
-kbench eval --model <OU output dir> --substrate P --name NPO
+kbench fetch-assets --mini
+kbench eval --model /path/to/openunlearning-output --substrate P --method none --name NPO
 ```
+
+`--mini` is sufficient here because this recipe scores only the substrate-P Llama
+cell. Use `--full` only when evaluating every substrate and base. Fetching can run in
+any K-Bench environment, including the CPU-only one. Run `kbench eval` in the main
+pinned K-Bench environment because it spawns the evaluator with `sys.executable`.
 
 The evaluator prints the per-substrate result and writes `results/NPO.kbench.json`,
 including the K-Score. Substrate P is comparable only if the trained checkpoint in

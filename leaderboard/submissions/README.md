@@ -13,18 +13,22 @@ Your pull request must add a new directory under `leaderboard/submissions/<metho
 leaderboard/submissions/<method-name>/
 ├── <method-name>.kbench-bundle/      # Self-contained bundle built by `kbench bundle`
 │   ├── bundle.json                   # Bundle manifest with hashes, configs, and pairings
-│   └── cells/                        # Shipped JSONL cells and .config.json sidecars
+│   └── cells/                        # JSONL only; sidecar configs are embedded in bundle.json
 │       ├── llama_P_<method>_forget_seed0.jsonl
-│       ├── llama_P_<method>_forget_seed0.config.json
 │       ├── llama_P_<method>_retain_seed0.jsonl
-│       ├── llama_P_<method>_retain_seed0.config.json
 │       ├── llama_P_none_forget_seed0.jsonl
-│       ├── llama_P_none_forget_seed0.config.json
+│       ├── llama_P_none_forget_seed137.jsonl
+│       ├── llama_P_none_forget_seed271.jsonl
 │       ├── llama_P_none_retain_seed0.jsonl
-│       └── llama_P_none_retain_seed0.config.json
+│       ├── llama_P_none_retain_seed137.jsonl
+│       └── llama_P_none_retain_seed271.jsonl
 ├── metadata.yaml                     # Submission metadata (see TEMPLATE/metadata.yaml)
 └── README.md                         # Description of method, environment, and reproduction
 ```
+
+`kbench bundle` copies every source JSONL, including all baseline cells present in
+the input directory. It does not copy separate `.config.json` files: their complete
+contents are embedded under `provenance.harness_sidecar_configs` in `bundle.json`.
 
 ### 1. Generate transcripts and score
 

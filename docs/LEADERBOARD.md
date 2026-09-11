@@ -77,13 +77,13 @@ For each evaluated substrate, `kbench score` prints:
 | **Retain shift ($\Delta\text{sel}$)** | Retain-set observer rate shift vs. baseline: `Δsel <val>` |
 | **Degeneration rate** | Agent trajectory degeneration rate on forget queries: `degen <val>%` |
 | **Worst channel** | Channel exhibiting highest leakage: `worst: <channel>` |
-| **Binary per-query OR(all)** | Complete-extraction forget rate with across-seed std: `binary per-query OR(all): forget <val> ± <std> across seeds` |
+| **Binary per-query OR(all)** | Complete-extraction forget rate: a one-seed score prints `forget <val>` without a spread; a multi-seed score adds `± <std> across seeds` |
 | **Absolute retain OR(all)** | Complete-extraction retain rate: `absolute retain <val>` |
 | **K-class verdict** | Mechanism classification (`K-REF α×`, `K-SUP`, or `measured failure`) |
 | **BH-adjusted McNemar $p_{\text{adj}}$** | Multiple-testing corrected significance vs. baseline |
-| **Eligibility line** | Explicit PASS/FAIL line checking the three paper conditions: `eligibility: PASS (retain preservation <val>, added degeneration <val>, no terminal agent collapse)` or `eligibility: FAIL (<failing conditions>)` |
+| **Eligibility line** | Explicit PASS/FAIL line checking the three paper conditions. Both forms show `retain preservation ratio <val>; added degeneration Δdeg <val>` before `no terminal agent collapse` or the failing conditions. |
 | **Fallbacks count** | Number of raw direct replies scored when no thought/tool was emitted |
-| **Seeds covered** | Candidate seeds used; extra baseline seeds are excluded, and a subset is labelled as not a full three-seed average |
+| **Seeds covered** | Candidate seeds used; `[0]` is labelled `seed-0 leaderboard minimum`, while any other strict subset keeps the incomplete-pool warning |
 
 Followed by run-level summary lines:
 - `coverage`: scored vs. requested count, with skipped/excluded substrates and reasons.

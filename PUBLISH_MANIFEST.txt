@@ -9,6 +9,8 @@ PUBLISH_MANIFEST.txt
 README.md
 assets/manifest.json
 assets/v77app.reference.json
+assets/qwen.reference.json
+assets/mistral.reference.json
 assets/v94loku_official_reference_snapshot/LICENSE
 assets/v94loku_official_reference_snapshot/PROVENANCE.json
 assets/v94loku_official_reference_snapshot/TOFU/config/model_config.yaml
@@ -153,3 +155,5 @@ leaderboard/submissions/README.md
 leaderboard/submissions/TEMPLATE/metadata.yaml
 tests/test_b2_scoring_and_provenance.py
 tests/test_evaluator_sidecar.py
+tests/test_p2b_fixes.py
+tests/test_external_and_crossmodel_reference.py

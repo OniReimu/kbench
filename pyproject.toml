@@ -28,6 +28,8 @@ exclude = ["kbench_cli/kbench.py", "kbench_cli/kscore.py"]
 [tool.hatch.build.targets.wheel.force-include]
 "assets/manifest.json" = "kbench_cli/_resources/assets/manifest.json"
 "assets/v77app.reference.json" = "kbench_cli/_resources/results/v77app.reference.json"
+"assets/qwen.reference.json" = "kbench_cli/_resources/results/qwen.reference.json"
+"assets/mistral.reference.json" = "kbench_cli/_resources/results/mistral.reference.json"
 "scripts/02_baseline_leakage.py" = "kbench_cli/_scripts/02_baseline_leakage.py"
 "scripts/09_k_verdict_v2.py" = "kbench_cli/_scripts/09_k_verdict_v2.py"
 "scripts/kbench.py" = "kbench_cli/kbench.py"

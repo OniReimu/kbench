@@ -17,6 +17,10 @@ kbench bundle --cells results --out MyMethod.kbench-bundle
 kbench report MyMethod.kbench-bundle
 ```
 
+This default all-substrate workflow uses `--full` because it needs every substrate's
+untreated baseline. A substrate-P-only weight method can use `--mini`, which fetches
+the Llama substrate-P baseline and is sufficient for that workflow.
+
 Submit the validated result bundle using the
 [leaderboard protocol](docs/LEADERBOARD.md).
 
@@ -88,6 +92,14 @@ The evaluator writes per-query JSONL files and `.config.json` sidecars into
 `<prefix>_<substrate>_<method>_<split>_seed<seed>.jsonl`
 (for example, `llama_P_MyMethod_forget_seed0.jsonl` and `llama_P_MyMethod_retain_seed0.jsonl`, alongside `llama_P_none_{forget,retain}_seed0.jsonl`).
 
+Candidate sidecars also record the `--name` value and a cheap model fingerprint.
+For a local checkpoint, the fingerprint hashes the exact `config.json` bytes plus
+the sorted root-level `(weight filename, byte size)` list for `*.safetensors` and
+`*.bin`; it never hashes weight contents. A Hugging Face ID is recorded as the repo
+ID at the evaluator's `main` revision, and API runs record the API model ID. A changed
+fingerprint refuses `--resume`. Runs begun by an older K-Bench version lack these
+fields and cannot be resumed by this version; start them under a new `--name`.
+
 `kbench score --cells <dir> --name MyMethod` scores candidate transcripts from
 `<dir>` (which must contain both your candidate cells and the baseline `none` cells).
 By default, it scores only the substrates for which both candidate and reference
@@ -95,9 +107,11 @@ cells exist and prints why others are skipped; it no longer prints a cross-subst
 mean, evaluating K-Score separately per substrate. For each scored substrate, it prints:
 - Candidate and untreated-baseline K-Score
 - Graded observer rate (the K-Score factor) forget, retain shift Δsel, and degeneration rate
-- Binary per-query OR(all) with across-seed std, and absolute retain OR(all)
+- Binary per-query OR(all) and absolute retain OR(all); an across-seed std is shown
+  only when more than one seed is scored
 - BH-adjusted McNemar p_adj and K-class verdict
-- An eligibility PASS/FAIL line (retain preservation $\ge 0.80$, added degeneration $\le 0.20$, no terminal agent collapse)
+- An eligibility PASS/FAIL line showing the retain preservation ratio and added
+  degeneration `Δdeg` beside any terminal-collapse label
 
 The K-Score factors and retain-preservation gate use the graded observer rate
 (token-recall severity); binary per-query OR(all) is reported alongside. Terminal
@@ -128,6 +142,10 @@ download tiers hosted by the Hugging Face dataset `kbench/kbench-assets`:
 kbench fetch-assets --target   # adapter, about 336 MB -> models/Llama-3.1-8B-kbench-target-adapter/
 kbench fetch-assets --indexes  # two indexes, about 8.4 GB each -> data/wiki_index_v21_{target_in,distractor}/
 ```
+
+`--mini` contains the substrate-P Llama baseline only. `--full` contains every
+substrate and base baseline. Use `--mini` for a P-only weight method and `--full`
+for the default all-substrate workflow above.
 
 The flags are additive: for example, `kbench fetch-assets --full --target --indexes`
 also fetches the full untreated baseline. With no tier flag, `fetch-assets` keeps its
@@ -248,6 +266,8 @@ API identity are derived from that sidecar and reconciled with the filename and
 manifest. Non-API forget cells must declare a same-model retain cell and the
 model/base-matched untreated `none` forget/retain references. Only API cells may
 be forget-only. The bundle also contains a copy of every listed JSONL cell.
+Separate sidecar files are not copied into `cells/`; their contents are embedded in
+`bundle.json`.
 
 Every row must include `query_id`, `pii_id`, `field`, `ground_truth`, `raw_full`,
 `halted_reason`, and `leakage`. API rows additionally require `api_incidents`,

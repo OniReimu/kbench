@@ -17,11 +17,10 @@ Integration plan (pre-eval, no per-query work):
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 
-from chcons.methods import UnlearnIntervention, require_external
+from chcons.methods import UnlearnIntervention, external_root, require_external
 
-_FALCON_ROOT = Path(__file__).resolve().parents[3] / "external" / "falcon"
+_FALCON_ROOT = external_root("falcon")
 if str(_FALCON_ROOT) not in sys.path:
     sys.path.insert(0, str(_FALCON_ROOT))
 

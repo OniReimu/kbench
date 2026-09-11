@@ -142,15 +142,23 @@ Third-party method code is **not** redistributed (license + size). Clone each
 into `external/<dir>` before running that method — the adapters fail loudly
 (`require_external`) when the path is missing:
 
-| Method | `external/<dir>` |
-|---|---|
-| ECO    | `eco-prompts`  |
-| Cha    | `cha-ihl-fila` |
-| DEPN   | `depn`         |
-| O3     | `o3-gao`       |
-| LEACE  | `leace`        |
+| Method | `external/<dir>` | Upstream | Commit used for the paper |
+|---|---|---|---|
+| ECO    | `eco-prompts`  | https://github.com/chrisliu298/llm-unlearn-eco | `9b0ba1ac6ab0c71868a6ad7d6210d445edd78d07` |
+| Cha    | `cha-ihl-fila` | https://github.com/csm9493/efficient-llm-unlearning | `272484aabc7ba970ed357dc9212fde4f4d62bb5a` |
+| DEPN   | `depn`         | https://github.com/flamewei123/DEPN | `793da18b5d82a3d1558ab91f8992690489ba3a0f` |
+| O3     | `o3-gao`       | https://github.com/GCYZSL/O3-LLM-UNLEARNING | `839afea7fc09001433ef30bd6670a6d6804a9045` |
+| LEACE  | `leace`        | https://github.com/EleutherAI/concept-erasure | `9f51753821316a1edacf78b52b464ab26d40e60a` |
 
-Pin the upstream commit you use; record it in your run notes.
+`external/` sits at the repository root, beside `chcons/` and `scripts/`:
+
+```bash
+git clone https://github.com/chrisliu298/llm-unlearn-eco external/eco-prompts
+git -C external/eco-prompts checkout 9b0ba1ac6ab0c71868a6ad7d6210d445edd78d07
+```
+
+To keep the checkouts elsewhere, set `KBENCH_EXTERNAL_DIR` to the directory that holds
+them (for example `KBENCH_EXTERNAL_DIR=/data/kbench-external`, containing `eco-prompts/`).
 
 The experimental FALCON adapter file is retained for auditability. If you work on
 that port, its checkout belongs at `external/falcon`, but it is not an available

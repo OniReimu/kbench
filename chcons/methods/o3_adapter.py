@@ -37,14 +37,13 @@ from __future__ import annotations
 
 import re
 import sys
-from pathlib import Path
 from typing import Literal
 
 import torch
 
-from chcons.methods import UnlearnIntervention, require_external
+from chcons.methods import UnlearnIntervention, external_root, require_external
 
-_O3_ROOT = Path(__file__).resolve().parents[3] / "external" / "o3-gao"
+_O3_ROOT = external_root("o3-gao")
 if str(_O3_ROOT) not in sys.path:
     sys.path.insert(0, str(_O3_ROOT))
 

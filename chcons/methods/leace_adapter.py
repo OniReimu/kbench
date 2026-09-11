@@ -24,13 +24,12 @@ forward hook. Per-query / before_generation = no-ops. Teardown removes hook.
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 
 import torch
 
-from chcons.methods import UnlearnIntervention, require_external
+from chcons.methods import UnlearnIntervention, external_root, require_external
 
-_LEACE_ROOT = Path(__file__).resolve().parents[3] / "external" / "leace"
+_LEACE_ROOT = external_root("leace")
 if str(_LEACE_ROOT) not in sys.path:
     sys.path.insert(0, str(_LEACE_ROOT))
 

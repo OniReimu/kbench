@@ -11,12 +11,24 @@ final teardown), so 02_baseline_leakage.py dispatches uniformly.
 
 from __future__ import annotations
 
+import os
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from chcons.agent import ReActAgent
+
+
+def external_root(name: str) -> Path:
+    """Checkout of a third-party method library.
+
+    `$KBENCH_EXTERNAL_DIR/<name>` when that variable is set, otherwise
+    `<repo>/external/<name>`, the location INSTALL.md gives.
+    """
+    base = os.environ.get("KBENCH_EXTERNAL_DIR")
+    root = Path(base).expanduser() if base else Path(__file__).resolve().parents[2] / "external"
+    return root / name
 
 
 def require_external(method: str, root: Path) -> None:
@@ -33,7 +45,8 @@ def require_external(method: str, root: Path) -> None:
         name = root.name
         raise RuntimeError(
             f"method {method!r} requires external library at '{root}' "
-            f"which is absent. Clone it into 'external/{name}' "
+            f"which is absent. Clone it into 'external/{name}' at the repo root, "
+            f"or set KBENCH_EXTERNAL_DIR to the directory holding it "
             f"(see INSTALL.md for the repo + commit)."
         )
 

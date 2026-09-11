@@ -37,8 +37,13 @@ a separate venv (e.g. `uv venv --python 3.11 .venv-mistral` then `uv pip install
 cross_model_pinned_requirements.txt`); do not install it into the main project
 venv. `qwen_pinned_requirements.txt` pins the older Qwen2.5-era stack (transformers
 4.47.1) and is retained for reproducing that compatibility path. Weight-based
-unlearning uses the open-unlearning framework (transformers 4.51) in its own
-isolated environment.
+unlearning uses `locuslab/open-unlearning` commit
+`4ad738aaf60f6a4385f6e2506d01da99e76c31f3` in its own isolated environment. The
+framework's committed `requirements.txt` pins `transformers==4.51.3` and
+`torch==2.4.1`. It does not declare `peft`; the maintainers' cluster-side
+`.venv-openunlearn` was not available locally, so the installed PEFT version and a
+complete offline `uv pip freeze` could not be determined. For that reason this
+release does not claim a PEFT version or ship an OpenUnlearning freeze file.
 
 ## Cross-model block (`reproduce.sh substrate`)
 
