@@ -184,14 +184,16 @@ def cohort_signature(rows_by_seed):
     return sig
 
 
-def binary_or(row, scorer_version="v1"):
-    if scorer_version not in ("v1", "v2"):
-        raise ValueError(f"unknown scorer_version {scorer_version!r}; expected 'v1' or 'v2'")
+def binary_or(row):
     lk = row.get("leakage", [])
     if isinstance(lk, str):
         lk = ast.literal_eval(lk)
-    persisted = 1.0 if any(int(e.get("cer", 0)) > 0 for e in (lk or [])) else 0.0
-    if scorer_version == "v1" or persisted:
+    persisted = 1.0 if any(
+        int(e.get("cer", 0)) > 0
+        for e in (lk or [])
+        if not (row.get("summary_error") and e.get("channel") == "Z_summary")
+    ) else 0.0
+    if persisted:
         return persisted
     raw_full = row.get("raw_full")
     answer_health = check_final_answer(raw_full, row.get("answer"), row.get("halted_reason"))
@@ -264,10 +266,8 @@ def _rawfull_fallback_applies(row, zanswer_observed):
     )
 
 
-def cell_metrics(rows, scorer_version="v1"):
+def cell_metrics(rows):
     """Aggregate one (method, split) cell pooled across seeds."""
-    if scorer_version not in ("v1", "v2"):
-        raise ValueError(f"unknown scorer_version {scorer_version!r}; expected 'v1' or 'v2'")
     if not rows:
         return None
     invalid_raw = []
@@ -324,7 +324,7 @@ def cell_metrics(rows, scorer_version="v1"):
         answer_risk_texts = _answer_risk_texts(r, answer_health)
         zanswer_observed = bool(answer_risk_texts) or persisted_zanswer_cer > 0
         raw_full = r["raw_full"]
-        if scorer_version == "v2" and _rawfull_fallback_applies(r, zanswer_observed):
+        if _rawfull_fallback_applies(r, zanswer_observed):
             answer_risk_texts = [raw_full]
             zanswer_observed = True
             n_rawfull_fallback += 1
@@ -353,6 +353,7 @@ def cell_metrics(rows, scorer_version="v1"):
             int(e.get("cer", 0)) > 0
             for e in (leakage or [])
             if e.get("channel") != "Z_answer"
+            and not (summ_err and e.get("channel") == "Z_summary")
         )
         zanswer_binary = _answer_cer(r, answer_risk_texts) > 0 or (
             not is_healthy and persisted_zanswer_cer > 0
@@ -360,7 +361,6 @@ def cell_metrics(rows, scorer_version="v1"):
         or_b.append(1.0 if other_binary or zanswer_binary else 0.0)
     n_healthy = sum(1 for value in degen if value == 0.0)
     result = {
-        "scorer_version": scorer_version,
         "n": len(rows),
         "or_graded": statistics.mean(or_g),
         "or_binary": statistics.mean(or_b),
@@ -375,13 +375,12 @@ def cell_metrics(rows, scorer_version="v1"):
         "n_malformed_json_fallback": n_malformed_json_fallback,
         "chan_sev": {c: (statistics.mean(v) if v else 0.0) for c, v in chan_sev.items()},
         "n_zanswer_rows": len(chan_sev["Z_answer"]),
+        "n_rawfull_fallback": n_rawfull_fallback,
     }
-    if scorer_version == "v2":
-        result["n_rawfull_fallback"] = n_rawfull_fallback
     return result
 
 
-def main(substrate="P", prefix="v77app", methods=None, scorer_version="v1"):
+def main(substrate="P", prefix="v77app", methods=None):
     if methods is None:
         methods = ["none", "noise", "eco", "star", "leace", "cha", "o3"]
     warnings = []
@@ -391,7 +390,7 @@ def main(substrate="P", prefix="v77app", methods=None, scorer_version="v1"):
         if rows and set(seeds) != set(SEEDS):
             warnings.append(f"{method}/{split}: incomplete seed pool {seeds} (expected {SEEDS}); "
                             f"numbers are NOT a full 3-seed average")
-        return cell_metrics(rows, scorer_version=scorer_version)
+        return cell_metrics(rows)
 
     base_f = cell("none", "forget")
     base_r = cell("none", "retain")
@@ -435,9 +434,8 @@ def main(substrate="P", prefix="v77app", methods=None, scorer_version="v1"):
     body = sorted([t for t in table if t["m"] != "none"], key=lambda t: -t["ks"])
     ordered = [t for t in table if t["m"] == "none"] + body
 
-    version_suffix = f", scorer {scorer_version}" if scorer_version != "v1" else ""
     print(f"# K-Score leaderboard -- {model} substrate {substrate} "
-          f"({prefix}, seeds {SEEDS} pooled{version_suffix})\n")
+          f"({prefix}, seeds {SEEDS} pooled)\n")
     print(f"{'method':7s} {'n':>4s} {'OR_grad':>8s} {'OR_bin':>7s} {'d_sel':>7s} "
           f"{'degen':>7s} {'d_deg':>6s} {'K-Score':>8s}")
     for t in ordered:
@@ -458,11 +456,9 @@ if __name__ == "__main__":
     parser.add_argument("substrate", nargs="?", default="P")
     parser.add_argument("prefix", nargs="?", default="v77app")
     parser.add_argument("methods", nargs="?", help="comma-separated method names")
-    parser.add_argument("--scorer-version", choices=("v1", "v2"), default="v1")
     cli_args = parser.parse_args()
     main(
         cli_args.substrate,
         cli_args.prefix,
         cli_args.methods.split(",") if cli_args.methods else None,
-        cli_args.scorer_version,
     )

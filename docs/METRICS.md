@@ -41,6 +41,10 @@ It is computed from the per-query JSONL (logical OR per query), and **exceeds th
 single-channel CER** when different queries leak through different channels. This is
 the headline number: a model-level "no memorization" verdict does not bound it.
 
+When a row has no observed answer, no tool calls, no thoughts, and a non-empty
+`raw_full`, the bare direct reply in `raw_full` is read as `Z_answer`; rows containing
+a thought or tool call do not use this fallback.
+
 ## Selectivity
 
 - **Retain OR(all)**: OR(all) on retain-set entities (should stay high = behavior preserved).

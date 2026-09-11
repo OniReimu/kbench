@@ -13,7 +13,7 @@ kbench eval --model <ckpt> --name MyMethod
 # Or, for transcripts produced elsewhere:
 kbench score --cells <dir> --name MyMethod
 # `results` here is your evaluator output directory.
-kbench bundle --cells results --out MyMethod.kbench-bundle --scorer-version v2
+kbench bundle --cells results --out MyMethod.kbench-bundle
 kbench report MyMethod.kbench-bundle
 ```
 
@@ -33,7 +33,7 @@ bash reproduce.sh smoke
 The shipped cells also exercise the documented offline bundle handoff:
 
 ```bash
-kbench bundle --cells data/smoke/cells --out smoke.kbench-bundle --scorer-version v1
+kbench bundle --cells data/smoke/cells --out smoke.kbench-bundle
 kbench report smoke.kbench-bundle
 ```
 
@@ -184,21 +184,11 @@ The following registered ports are experimental and are not counted as available
 - `grun`: conformance still requires a separate activation-space harness for the
   gated-ReFT edit.
 
-## Scorer versions
-
-The default scorer is `v2`. Pass `--scorer-version v1` to reproduce the paper's
-scorer. Version 2 additionally scores a reply that skips the agent loop as the
-answer, rather than dropping that directly returned text from observation.
-
-```bash
-kbench score --cells <dir> --name MyMethod --scorer-version v1
-```
-
 ## Transcript bundles and offline reports
 
 `kbench bundle` creates a directory using the candidate schema
-`kbench-transcript-bundle@1-candidate`. Its `bundle.json` records the K-Bench and
-scorer versions, creation time, per-cell run identity (`model`, `base_model`,
+`kbench-transcript-bundle@1-candidate`. Its `bundle.json` records the K-Bench
+release and scoring semantics, creation time, per-cell run identity (`model`, `base_model`,
 `method`, `substrate`, `split`, `seed`, and `n`), SHA-256, embedded evaluator
 sidecar config, and explicit forget/retain/reference pairings. Each JSONL must
 have its evaluator `.config.json` sidecar; substrate, split, seed, row count, and
@@ -215,7 +205,7 @@ and deterministic for a fixed bundle.
 
 ```bash
 # `results` here is your evaluator output directory, containing JSONL cells and sidecars.
-kbench bundle --cells results --out MyMethod.kbench-bundle --scorer-version v2
+kbench bundle --cells results --out MyMethod.kbench-bundle
 kbench report MyMethod.kbench-bundle
 ```
 

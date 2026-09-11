@@ -9,7 +9,7 @@
 Emits the leaderboard row to results/<name>.kbench.json (or the --cells dir for score) plus a
 one-line summary per substrate.
 Scoring reuses scripts/kscore.py verbatim (load + cell_metrics + the substrate-broken
-gates), so numbers match the paper. A candidate is scored against the shipped baseline
+gates), so every release entry point uses the same metric. A candidate is scored against the shipped baseline
 reference cells -- the `none` cells under --prefix -- so an author runs only their own
 method, never the baseline.
 
@@ -64,9 +64,6 @@ RESERVED_NAMES = frozenset({"none"})
 SUB_CLI2FILE = {"P": "P", "C": "C", "R-text": "R-text", "R-struct": "R-struct"}
 ALL_SUBS_LOCAL = ["P", "C", "R-text", "R-struct"]
 ALL_SUBS_API = ["C", "R-text", "R-struct"]  # API path is C/R only (weights immutable)
-DEFAULT_SCORER_VERSION = "v2"
-
-
 def _kbench_version() -> str:
     try:
         return importlib.metadata.version("kbench")
@@ -109,26 +106,17 @@ def validate_prefix(prefix: str) -> str | None:
 
 
 def _cell(prefix, sub_file, method, split):
-    """Legacy v1 cell helper; keep the four-argument call shape for callers/tests."""
-    return _cell_versioned(prefix, sub_file, method, split, "v1")
-
-
-def _cell_versioned(prefix, sub_file, method, split, scorer_version):
     by_seed = kscore.load_by_seed(method, sub_file, split, prefix)
     seeds = [sd for sd in kscore.SEEDS if sd in by_seed]
     rows = [r for sd in seeds for r in by_seed[sd]]
-    return (
-        kscore.cell_metrics(rows, scorer_version=scorer_version) if rows else None
-    ), seeds, by_seed
+    return (kscore.cell_metrics(rows) if rows else None), seeds, by_seed
 
 
-def score_substrate(prefix, sub_cli, name, scorer_version="v1"):
+def score_substrate(prefix, sub_cli, name):
     """K-Score for one substrate: candidate vs shipped `none` baseline. Reuses kscore math."""
     sub = SUB_CLI2FILE[sub_cli]
     def cell(method, split):
-        if scorer_version == "v1":
-            return _cell(prefix, sub, method, split)
-        return _cell_versioned(prefix, sub, method, split, scorer_version)
+        return _cell(prefix, sub, method, split)
 
     base_f, sbf, base_f_by_seed = cell("none", "forget")
     if base_f is None:
@@ -166,10 +154,7 @@ def score_substrate(prefix, sub_cli, name, scorer_version="v1"):
                 "n_rows": base_f["n"],
                 "n_healthy_final_answers": base_f["n_healthy_final_answers"],
                 "n_zanswer_rows": base_f["n_zanswer_rows"],
-                **(
-                    {"n_rawfull_fallback": base_f["n_rawfull_fallback"]}
-                    if scorer_version == "v2" else {}
-                ),
+                "n_rawfull_fallback": base_f["n_rawfull_fallback"],
             },
         }
     base_r, sbr, base_r_by_seed = cell("none", "retain")
@@ -240,15 +225,14 @@ def score_substrate(prefix, sub_cli, name, scorer_version="v1"):
                   "candidate_forget": sf, "candidate_retain": sr},
         "n_forget": f["n"],
     }
-    if scorer_version == "v2":
-        row["n_rawfull_fallback"] = f["n_rawfull_fallback"]
+    row["n_rawfull_fallback"] = f["n_rawfull_fallback"]
     if not complete:
         row["warning"] = (f"incomplete seed pool (need {sorted(want)}); "
                           f"K-Score is NOT a full {len(want)}-seed average")
     return row
 
 
-def emit(name, rows, requested, prefix="llama", scorer_version="v1"):
+def emit(name, rows, requested, prefix="llama"):
     scored = [r for r in rows if r.get("status") == "ok"]
     excluded_by_baseline_gate = [r for r in rows if r.get("status") == "substrate_broken"]
     invalid_or_incomplete = [
@@ -286,7 +270,6 @@ def emit(name, rows, requested, prefix="llama", scorer_version="v1"):
             k_score_mean_suppressed = "some requested substrate produced no scorable cell"
 
     out = {
-        "scorer_version": scorer_version,
         "method": name,
         "substrates": rows,
         "k_score_mean": k_score_mean,
@@ -311,7 +294,7 @@ def emit(name, rows, requested, prefix="llama", scorer_version="v1"):
     kscore.RES.mkdir(parents=True, exist_ok=True)
     out_path = kscore.RES / f"{name}.kbench.json"
     out_path.write_text(json.dumps(out, indent=2))
-    print(f"\n== {name} -- K-Bench (scorer {scorer_version}) ==")
+    print(f"\n== {name} -- K-Bench ==")
     for r in rows:
         if r["status"] == "substrate_broken":
             print(f"  {r['substrate']:9s} : {r['status']}")
@@ -333,8 +316,7 @@ def emit(name, rows, requested, prefix="llama", scorer_version="v1"):
                   f"degen {r['degen']:.0%} | worst: {r['worst_channel']}")
             if r.get("warning"):
                 print(f"    ! {r['warning']}")
-            if scorer_version == "v2":
-                print(f"    raw_full fallbacks: {r['n_rawfull_fallback']}")
+            print(f"    raw_full fallbacks: {r['n_rawfull_fallback']}")
     cov_desc = f"{len(scored_subs)}/{len(requested)} scored"
     extra = []
     if excluded_subs:
@@ -433,10 +415,10 @@ def _reference_eval_args(reference: dict, substrate: str) -> list[str]:
     return flags
 
 
-def score_forget_only(prefix: str, sub_cli: str, name: str, scorer_version: str) -> dict:
+def score_forget_only(prefix: str, sub_cli: str, name: str) -> dict:
     """Report leakage without a K-Score when no model-matched reference exists."""
     sub = SUB_CLI2FILE[sub_cli]
-    f, seeds, _ = _cell_versioned(prefix, sub, name, "forget", scorer_version)
+    f, seeds, _ = _cell(prefix, sub, name, "forget")
     if f is None:
         return {"substrate": sub_cli, "status": "missing_candidate_cells"}
     row = {
@@ -450,8 +432,7 @@ def score_forget_only(prefix: str, sub_cli: str, name: str, scorer_version: str)
         "seeds_complete": set(seeds) == set(kscore.SEEDS),
         "n_forget": f["n"],
     }
-    if scorer_version == "v2":
-        row["n_rawfull_fallback"] = f["n_rawfull_fallback"]
+    row["n_rawfull_fallback"] = f["n_rawfull_fallback"]
     return row
 
 
@@ -466,7 +447,6 @@ def run_eval(args):
         sys.exit(2)
     subs = ([s.strip() for s in args.substrate.split(",")] if args.substrate
             else (ALL_SUBS_API if args.api_model else ALL_SUBS_LOCAL))
-    scorer_version = getattr(args, "scorer_version", DEFAULT_SCORER_VERSION)
     invalid_subs = [s for s in subs if s not in SUB_CLI2FILE]
     if invalid_subs:
         print(f"unknown substrate '{invalid_subs[0]}' (valid substrates: {sorted(SUB_CLI2FILE)})")
@@ -522,10 +502,10 @@ def run_eval(args):
                 print(f">> run {tag}")
                 subprocess.run(cmd, check=True)
     if api_without_reference:
-        rows = [score_forget_only(args.prefix, s, args.name, scorer_version) for s in subs]
+        rows = [score_forget_only(args.prefix, s, args.name) for s in subs]
     else:
-        rows = [score_substrate(args.prefix, s, args.name, scorer_version) for s in subs]
-    return emit(args.name, rows, subs, args.prefix, scorer_version)
+        rows = [score_substrate(args.prefix, s, args.name) for s in subs]
+    return emit(args.name, rows, subs, args.prefix)
 
 
 def run_score(args):
@@ -541,11 +521,10 @@ def run_score(args):
         kscore.RES = Path(args.cells).resolve()  # scorer reads the user's cell dir
     subs = ([s.strip() for s in args.substrate.split(",")] if args.substrate
             else ALL_SUBS_LOCAL)
-    scorer_version = getattr(args, "scorer_version", DEFAULT_SCORER_VERSION)
     reason = check_reference(args.prefix, args.base, subs)
     if reason:
         rows = [{"substrate": s, "status": "base_mismatch", "detail": {"reason": reason}} for s in subs]
-        return emit(args.name, rows, subs, args.prefix, scorer_version)
+        return emit(args.name, rows, subs, args.prefix)
     if args.base is None:
         args.base = load_reference(args.prefix)["base_model"]
     candidate_name = args.name
@@ -555,19 +534,8 @@ def run_score(args):
             f"prefix='{args.prefix}', name='{args.name}', substrates={subs}"
         )
         sys.exit(2)
-    scored_rows = [
-        score_substrate(args.prefix, s, candidate_name)
-        if scorer_version == "v1"
-        else score_substrate(args.prefix, s, candidate_name, scorer_version)
-        for s in subs
-    ]
-    return emit(
-        args.name,
-        scored_rows,
-        subs,
-        args.prefix,
-        scorer_version,
-    )
+    scored_rows = [score_substrate(args.prefix, s, candidate_name) for s in subs]
+    return emit(args.name, scored_rows, subs, args.prefix)
 
 
 def run_bundle(args):
@@ -576,7 +544,6 @@ def run_bundle(args):
         output = build_bundle(
             Path(args.cells),
             Path(args.out),
-            scorer_version=args.scorer_version,
             kbench_version=_kbench_version(),
             reference_for_prefix=load_reference,
         )
@@ -587,10 +554,10 @@ def run_bundle(args):
 
 
 def _bundle_cell_metrics(
-    cells: list[dict], rows_by_file: dict[str, list[dict]], scorer_version: str
+    cells: list[dict], rows_by_file: dict[str, list[dict]]
 ) -> dict | None:
     rows = [row for cell in cells for row in rows_by_file[cell["file"]]]
-    return kscore.cell_metrics(rows, scorer_version=scorer_version) if rows else None
+    return kscore.cell_metrics(rows) if rows else None
 
 
 def _assert_bundle_cohort(candidate_cells, baseline_cells, rows_by_file, label):
@@ -612,13 +579,12 @@ def _append_channel_table(lines: list[str], channel_values: dict[str, float]) ->
 
 def render_bundle_report(manifest: dict, rows_by_file: dict[str, list[dict]]) -> str:
     """Render deterministic offline score output using the canonical scorer."""
-    scorer_version = manifest["scorer_version"]
     cells = manifest["cells"]
     lines = [
         "K-Bench offline report",
         f"Schema: {manifest['schema']}",
         f"K-Bench version: {manifest['kbench_version']}",
-        f"Scorer version: {scorer_version}",
+        "Scorer: v2",
     ]
     candidate_groups = sorted(
         {
@@ -655,7 +621,7 @@ def render_bundle_report(manifest: dict, rows_by_file: dict[str, list[dict]]) ->
                 and cell["substrate"] == substrate
                 and cell["split"] == "forget"
             ]
-            f = _bundle_cell_metrics(method_f, rows_by_file, scorer_version)
+            f = _bundle_cell_metrics(method_f, rows_by_file)
             if f is None:
                 lines.append(f"  {substrate:9s} : missing_candidate_cells")
                 continue
@@ -685,9 +651,9 @@ def render_bundle_report(manifest: dict, rows_by_file: dict[str, list[dict]]) ->
                 continue
             _assert_bundle_cohort(method_f, base_f, rows_by_file, f"{method}/{substrate}/forget")
             _assert_bundle_cohort(method_r, base_r, rows_by_file, f"{method}/{substrate}/retain")
-            bf = _bundle_cell_metrics(base_f, rows_by_file, scorer_version)
-            br = _bundle_cell_metrics(base_r, rows_by_file, scorer_version)
-            r = _bundle_cell_metrics(method_r, rows_by_file, scorer_version)
+            bf = _bundle_cell_metrics(base_f, rows_by_file)
+            br = _bundle_cell_metrics(base_r, rows_by_file)
+            r = _bundle_cell_metrics(method_r, rows_by_file)
             assert bf is not None and br is not None and r is not None
             if (
                 bf["or_binary"] < kscore.SUBSTRATE_BROKEN_OR
@@ -1033,8 +999,6 @@ def main():
     e.add_argument("--base", default=None,
                    help="identity of the candidate's base model (default: read from reference metadata)")
     e.add_argument("--n", type=int, default=200, help="queries per seed")
-    e.add_argument("--scorer-version", choices=("v1", "v2"), default=DEFAULT_SCORER_VERSION,
-                   help="scoring semantics (default: v2; v1 reproduces the published scorer)")
     e.set_defaults(fn=run_eval)
 
     s = sp.add_parser("score", help="score candidate transcripts you produced yourself")
@@ -1046,15 +1010,11 @@ def main():
                    help="shipped reference base-model set (default llama = Llama-3.1-8B)")
     s.add_argument("--base", default=None,
                    help="identity of the candidate's base model (default: read from reference metadata)")
-    s.add_argument("--scorer-version", choices=("v1", "v2"), default=DEFAULT_SCORER_VERSION,
-                   help="scoring semantics (default: v2; v1 reproduces the published scorer)")
     s.set_defaults(fn=run_score)
 
     b = sp.add_parser("bundle", help="build a self-contained transcript bundle from cell files")
     b.add_argument("--cells", required=True, help="directory containing per-cell JSONL files")
     b.add_argument("--out", required=True, help="new output bundle directory")
-    b.add_argument("--scorer-version", choices=("v1", "v2"), default=DEFAULT_SCORER_VERSION,
-                   help="scorer version recorded in the bundle (default: v2)")
     b.set_defaults(fn=run_bundle)
 
     report = sp.add_parser("report", help="validate and score a transcript bundle offline")

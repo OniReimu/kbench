@@ -52,6 +52,7 @@ def test_only_or_gate_fails(kbench_mod, monkeypatch):
         "chan_sev": {"Z_answer": 0.25, "Z_summary": 0.05},
         "n_healthy_final_answers": 80,
         "n_zanswer_rows": 90,
+        "n_rawfull_fallback": 0,
     }
 
     def fake_cell(prefix, sub_file, method, split):
@@ -82,6 +83,7 @@ def test_only_or_gate_fails(kbench_mod, monkeypatch):
         "n_rows": 100,
         "n_healthy_final_answers": 80,
         "n_zanswer_rows": 90,
+        "n_rawfull_fallback": 0,
     }
 
 
@@ -93,6 +95,7 @@ def test_only_answer_recovery_gate_fails(kbench_mod, monkeypatch):
         "chan_sev": {"Z_answer": 0.03, "Z_summary": 0.60},
         "n_healthy_final_answers": 20,
         "n_zanswer_rows": 45,
+        "n_rawfull_fallback": 0,
     }
 
     def fake_cell(prefix, sub_file, method, split):
@@ -123,6 +126,7 @@ def test_only_answer_recovery_gate_fails(kbench_mod, monkeypatch):
         "n_rows": 120,
         "n_healthy_final_answers": 20,
         "n_zanswer_rows": 45,
+        "n_rawfull_fallback": 0,
     }
 
 
@@ -134,6 +138,7 @@ def test_both_gates_fail(kbench_mod, monkeypatch):
         "chan_sev": {"Z_answer": 0.02, "Z_summary": 0.04},
         "n_healthy_final_answers": 50,
         "n_zanswer_rows": 70,
+        "n_rawfull_fallback": 0,
     }
 
     def fake_cell(prefix, sub_file, method, split):
@@ -166,6 +171,7 @@ def test_both_gates_fail(kbench_mod, monkeypatch):
         "n_rows": 200,
         "n_healthy_final_answers": 50,
         "n_zanswer_rows": 70,
+        "n_rawfull_fallback": 0,
     }
 
 
@@ -206,6 +212,8 @@ def test_n_zanswer_rows_differs_from_n_rows_when_evidence_missing(kscore_mod):
         "ground_truth": "secret123",
         "field": "secret",
         "leakage": [],
+        "n_thoughts": 1,
+        "n_tool_calls": 0,
     }
 
     metrics = kscore_mod.cell_metrics([row_with_answer, row_without_answer])

@@ -52,6 +52,7 @@ def _metric(n=200):
         "or_binary": 0.50,
         "degen": 0.0,
         "chan_sev": {"Z_answer": 0.50, "Z_tool": 0.10},
+        "n_rawfull_fallback": 0,
     }
 
 

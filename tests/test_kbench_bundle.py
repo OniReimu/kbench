@@ -1,4 +1,4 @@
-"""Acceptance tests for transcript bundle v1 candidate and offline reports."""
+"""Acceptance tests for candidate transcript bundles and offline reports."""
 
 from __future__ import annotations
 
@@ -53,7 +53,6 @@ def _build_smoke_bundle(tmp_path: Path):
     kbench.build_bundle(
         cells,
         bundle,
-        scorer_version="v1",
         kbench_version="1.0.0",
         reference_for_prefix=kbench.load_reference,
     )
@@ -70,7 +69,7 @@ def test_smoke_bundle_report_is_deterministic_and_matches_smoke_k_score(
     second = kbench.render_bundle_report(manifest, rows).encode("utf-8")
 
     assert first == second
-    assert b"Scorer version: v1" in first
+    assert b"Scorer: v2" in first
     assert b"K-Score 0.000" in first
     assert b"channel       severity" in first
     assert b"Z_tool_wide   0.750" in first
@@ -88,8 +87,6 @@ def test_documented_smoke_bundle_and_report_cli_match_smoke_report(tmp_path: Pat
             str(SMOKE_CELLS),
             "--out",
             str(bundle),
-            "--scorer-version",
-            "v1",
         ],
         cwd=ROOT,
         capture_output=True,
@@ -175,7 +172,6 @@ def test_api_rows_require_incidents_retries_and_reasoning(tmp_path: Path) -> Non
     kbench.build_bundle(
         cells,
         bundle,
-        scorer_version="v2",
         kbench_version="1.0.0",
     )
 
@@ -195,7 +191,7 @@ def test_bundle_manifest_declares_run_identity_provenance_and_pairing(
 
     assert manifest["schema"] == "kbench-transcript-bundle@1-candidate"
     assert manifest["created_at"].endswith("+00:00")
-    assert manifest["scorer_version"] == "v1"
+    assert manifest["scorer_version"] == "v2"
     assert manifest["kbench_version"] == "1.0.0"
     assert manifest["run_identity"]
     assert manifest["provenance"]["harness_sidecar_configs"]
@@ -204,6 +200,17 @@ def test_bundle_manifest_declares_run_identity_provenance_and_pairing(
         assert field in cell
     assert "harness_sidecar_config" in cell["provenance"]
     assert any(pairing["forget"] and pairing["retain"] for pairing in manifest["pairings"])
+
+
+def test_report_rejects_retired_bundle_and_names_frozen_branch(tmp_path: Path) -> None:
+    kbench, bundle = _build_smoke_bundle(tmp_path)
+    manifest_path = bundle / "bundle.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["scorer_version"] = "v1"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(kbench.BundleValidationError, match="aaai2027"):
+        kbench.load_bundle(bundle)
 
 
 def test_report_refuses_empty_pairings_and_names_non_api_forget_cell(tmp_path: Path) -> None:
@@ -267,7 +274,7 @@ def test_sidecar_api_identity_cannot_be_disabled_to_skip_required_rows(tmp_path:
         encoding="utf-8",
     )
     bundle = tmp_path / "api.bundle"
-    kbench.build_bundle(cells, bundle, scorer_version="v2", kbench_version="1.0.0")
+    kbench.build_bundle(cells, bundle, kbench_version="1.0.0")
     manifest_path = bundle / "bundle.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["cells"][0]["api"] = False
@@ -357,8 +364,6 @@ def test_bundle_and_report_refuse_mixed_local_and_api_pairing(tmp_path: Path) ->
             str(cells),
             "--out",
             str(mixed_bundle),
-            "--scorer-version",
-            "v1",
         ],
         cwd=ROOT,
         capture_output=True,
@@ -386,8 +391,6 @@ def test_bundle_and_report_refuse_mixed_local_and_api_pairing(tmp_path: Path) ->
             str(local_cells),
             "--out",
             str(report_bundle),
-            "--scorer-version",
-            "v1",
         ],
         cwd=ROOT,
         capture_output=True,
@@ -438,7 +441,7 @@ def test_method_name_containing_another_substrate_marker_round_trips(tmp_path: P
                 seed=0,
             )
     bundle = tmp_path / "round-trip.bundle"
-    kbench.build_bundle(cells, bundle, scorer_version="v1", kbench_version="1.0.0")
+    kbench.build_bundle(cells, bundle, kbench_version="1.0.0")
 
     manifest, _ = kbench.load_bundle(bundle)
 
@@ -477,7 +480,7 @@ def test_report_keeps_same_method_on_two_checkpoint_models_separate(tmp_path: Pa
                 clear_leakage=seed == 1 and split == "forget",
             )
     bundle = tmp_path / "models.bundle"
-    kbench.build_bundle(cells, bundle, scorer_version="v1", kbench_version="1.0.0")
+    kbench.build_bundle(cells, bundle, kbench_version="1.0.0")
     manifest, rows = kbench.load_bundle(bundle)
 
     report = kbench.render_bundle_report(manifest, rows)

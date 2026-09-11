@@ -63,6 +63,7 @@ def _make_ok_row(sub, k_score=0.75, seeds_complete=True):
             "candidate_retain": [0, 137, 271],
         },
         "n_forget": 200,
+        "n_rawfull_fallback": 0,
     }
 
 
@@ -306,4 +307,3 @@ def test_printed_output_suppression_and_coverage(kbench, capsys):
     mean_line = [line for line in captured.splitlines() if "mean" in line][0]
     assert "K-Score" not in mean_line
     assert not any(char.isdigit() for char in mean_line)
-

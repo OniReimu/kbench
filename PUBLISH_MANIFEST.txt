@@ -90,9 +90,7 @@ scripts/00d_build_distractor_pool.py
 scripts/01_generate_pii.py
 scripts/02_baseline_leakage.py
 scripts/03_inject_pii.py
-scripts/07_mcnemar_analysis.py
 scripts/08_rescore_raw_full.py
-scripts/09_k_verdict.py
 scripts/09_k_verdict_v2.py
 scripts/10_compute_z_rag_oracle.py
 scripts/11_rescore_z_tool_wide.py

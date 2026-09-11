@@ -307,7 +307,7 @@ def test_p_eval_uses_reference_profile_without_stacking_injection_lora(
     monkeypatch.setattr(
         kbench_mod,
         "score_substrate",
-        lambda prefix, sub, name, scorer_version: {
+        lambda prefix, sub, name: {
             "substrate": sub,
             "status": "missing_candidate_cells",
         },
@@ -322,7 +322,6 @@ def test_p_eval_uses_reference_profile_without_stacking_injection_lora(
         base="test-org/base-A",
         n=10,
         resume=False,
-        scorer_version="v2",
     )
 
     kbench_mod.run_eval(args)
@@ -359,7 +358,7 @@ def test_api_eval_without_matching_reference_is_forget_only_and_has_no_k_score(
     monkeypatch.setattr(
         kbench_mod,
         "score_forget_only",
-        lambda prefix, sub, name, scorer_version: {
+        lambda prefix, sub, name: {
             "substrate": sub,
             "status": "no_reference_for_api_model",
             "or_forget": 0.25,
@@ -386,7 +385,6 @@ def test_api_eval_without_matching_reference_is_forget_only_and_has_no_k_score(
         base=None,
         n=10,
         resume=False,
-        scorer_version="v2",
     )
 
     out = kbench_mod.run_eval(args)

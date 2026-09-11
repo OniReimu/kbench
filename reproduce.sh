@@ -48,9 +48,9 @@ case "$TARGET" in
               # Reuse an installed numpy when available; otherwise fetch only numpy in
               # an isolated uv env, skipping the torch/transformers/faiss build.
     if python3 -c "import numpy" >/dev/null 2>&1; then
-      python3 scripts/smoke_report.py --scorer-version v1
+      python3 scripts/smoke_report.py
     else
-      uv run --no-project --with numpy python scripts/smoke_report.py --scorer-version v1
+      uv run --no-project --with numpy python scripts/smoke_report.py
     fi
     ;;
   prep)       # one-time prerequisites — see INSTALL.md for the full manual steps
@@ -90,14 +90,14 @@ case "$TARGET" in
     ;;
   topology)   # baseline leak-topology table, Llama, all substrates
     for sub in P C R-text R-struct; do run_cell "$MODEL_LLAMA" "$sub" none; done
-    uv run python scripts/09_k_verdict_v2.py --scorer-version v1 --results-dir results --out docs/verdict_topology.md
+    uv run python scripts/09_k_verdict_v2.py --results-dir results --out docs/verdict_topology.md
     ;;
   interfaces) # five-interface comparison on Llama P (tab:benchmark_compare)
     echo ">> agentic K-Bench on weight-based checkpoints"
     for unl in none eco star leace cha o3; do run_cell "$MODEL_LLAMA" P "$unl"; done
-    uv run python scripts/09_k_verdict_v2.py --scorer-version v1 --results-dir results --out docs/verdict_interfaces.md
+    uv run python scripts/09_k_verdict_v2.py --results-dir results --out docs/verdict_interfaces.md
     echo ">> headline K-Score leaderboard (ECO reference vs the five defenses; App. table)"
-    uv run python scripts/kscore.py P llama --scorer-version v1
+    uv run python scripts/kscore.py P llama
     echo ">> faithful TOFU / MUSE / WMDP probes (see scripts 21/22/24)"
     echo "   run: scripts/21_tofu_faithful.py, 22_muse_faithful.py, 24_wmdp_mcq.py per checkpoint"
     echo "   then: scripts/23_aggregate_benchmark.py (merges the probe shards into the table;"
@@ -111,7 +111,7 @@ case "$TARGET" in
     # substrate/method/seed dict has no model axis), so those families are
     # aggregated independently. See docs/COMPUTE.md ("Cross-model block").
     for sub in C R-text R-struct; do run_cell "$MODEL_LLAMA" "$sub" none; done
-    uv run python scripts/09_k_verdict_v2.py --scorer-version v1 --results-dir results --out docs/verdict_substrate.md
+    uv run python scripts/09_k_verdict_v2.py --results-dir results --out docs/verdict_substrate.md
     echo ">> cross-model rows (Qwen / Mistral) — emit under their own prefixes"
     echo "   and aggregate separately; see docs/COMPUTE.md (Cross-model block)."
     for model in "$MODEL_QWEN" "$MODEL_MISTRAL"; do

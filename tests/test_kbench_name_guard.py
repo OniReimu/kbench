@@ -175,7 +175,7 @@ def test_run_score_accepts_explicit_none_self_check(kbench_mod, tmp_path, monkey
     monkeypatch.setattr(
         kbench_mod,
         "score_substrate",
-        lambda prefix, sub, name, scorer_version: seen.append((prefix, sub, name))
+        lambda prefix, sub, name: seen.append((prefix, sub, name))
         or {"substrate": sub, "status": "missing_candidate_cells"},
     )
     args = argparse.Namespace(
@@ -328,7 +328,7 @@ def test_existing_cells_with_resume_skips_those_and_proceeds(kbench_mod, tmp_pat
     monkeypatch.setattr(
         kbench_mod,
         "score_substrate",
-        lambda prefix, sub, name, scorer_version: {
+        lambda prefix, sub, name: {
             "substrate": sub,
             "status": "ok",
             "k_score": 0.42,

@@ -203,13 +203,10 @@ def build_bundle(
     cells_dir: Path,
     out_dir: Path,
     *,
-    scorer_version: str,
     kbench_version: str,
     reference_for_prefix: Callable[[str], dict | None] | None = None,
 ) -> Path:
     """Copy cells and their provenance into a candidate bundle directory."""
-    if scorer_version not in ("v1", "v2"):
-        raise BundleValidationError(f"unsupported scorer version: {scorer_version}")
     source = cells_dir.resolve()
     paths = sorted(source.glob("*.jsonl"))
     if not paths:
@@ -324,7 +321,7 @@ def build_bundle(
         "schema": BUNDLE_SCHEMA,
         "created_at": datetime.now(UTC).replace(microsecond=0).isoformat(),
         "kbench_version": kbench_version,
-        "scorer_version": scorer_version,
+        "scorer_version": "v2",
         "run_identity": [
             {
                 key: cell[key]
@@ -368,8 +365,11 @@ def load_bundle(bundle_dir: Path) -> tuple[dict, dict[str, list[dict]]]:
     ):
         if field not in manifest:
             raise BundleValidationError(f"bundle.json missing required field '{field}'")
-    if manifest["scorer_version"] not in ("v1", "v2"):
-        raise BundleValidationError("bundle.json has unsupported scorer_version")
+    if manifest["scorer_version"] != "v2":
+        raise BundleValidationError(
+            "bundle.json scorer_version must be 'v2'; use the aaai2027 branch "
+            "to reproduce or inspect v1 bundles"
+        )
     if not isinstance(manifest["cells"], list) or not manifest["cells"]:
         raise BundleValidationError("bundle.json cells must be a non-empty list")
     loaded_rows: dict[str, list[dict]] = {}

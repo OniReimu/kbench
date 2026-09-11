@@ -4,8 +4,12 @@ This page is only for regenerating the paper's released table inputs and reports
 The checkpoint-evaluation and submission lifecycle remains in the
 [top-level README](../README.md).
 
-All reproduction targets pin the published scorer with `--scorer-version v1`.
-Run them from the release root after completing the installation and asset steps
+The AAAI-2027 printed numbers are reproduced from the public repository's frozen
+`aaai2027` branch (commit `bc52cd00`). The main branch scores a bare direct reply
+as the answer.
+
+Run the targets below from the release root after completing the installation and
+asset steps
 in [INSTALL.md](../INSTALL.md). Runtime estimates are the single-H100 guidance in
 [COMPUTE.md](../docs/COMPUTE.md); hardware and storage can change wall time.
 
@@ -32,13 +36,13 @@ fixture includes each JSONL together with its evaluator-generated `.config.json`
 sidecar:
 
 ```bash
-kbench bundle --cells data/smoke/cells --out smoke.kbench-bundle --scorer-version v1
+kbench bundle --cells data/smoke/cells --out smoke.kbench-bundle
 kbench report smoke.kbench-bundle
 ```
 
 For your own results, point it at the evaluator output directory:
 
 ```bash
-kbench bundle --cells <evaluator-output> --out method.kbench-bundle --scorer-version v1
+kbench bundle --cells <evaluator-output> --out method.kbench-bundle
 kbench report method.kbench-bundle
 ```

@@ -14,7 +14,6 @@ benchmark: a single-answer probe reads "forgotten" while OR(all) is unchanged.
 """
 from __future__ import annotations
 
-import argparse
 import importlib.util
 import math
 import sys
@@ -95,9 +94,6 @@ def report(method: str) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--scorer-version", choices=("v1",), default="v1")
-    parser.parse_args()
     print("K-Bench smoke — scoring path on a bundled fixture "
           "(CPU-only, no model, no download)")
     print(f"Fixture: {CELLS.relative_to(HERE.parent)} (substrate P, 1 seed, "
