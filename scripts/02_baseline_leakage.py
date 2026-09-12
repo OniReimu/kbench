@@ -350,8 +350,11 @@ def main() -> None:
             agent_db_path: Path | None = args.target_bios  # target IN DB
         else:
             agent_db_path = args.distractor_pool  # target NOT in DB
+        # The API path defers the FAISS/embedder load to the first search_wiki call
+        # (chcons.api_agent -> LazyRetriever); the local path builds the retriever eagerly.
+        index_note = " (loaded on first search_wiki call)" if args.api_model else ""
         print(f"[v2.1-C] substrate={args.substrate} → "
-              f"lora={args.lora_path}, index={args.index_dir}, "
+              f"lora={args.lora_path}, index={args.index_dir}{index_note}, "
               f"target_bios={args.target_bios}, "
               f"distractor_pool={args.distractor_pool}, "
               f"agent_db_path={agent_db_path}, "
@@ -496,7 +499,7 @@ def main() -> None:
         print("[plan] all queries already done; rebuilding summary only")
     else:
         print(f"[plan] {len(pending)} queries to run")
-        print(f"[load] {args.model}")
+        print(f"[load] {args.api_model or args.model}")
         t0 = time.time()
         # Setup C: build in-context PII block (only used when inject-mode=system_prompt)
         incontext_pii_block = ""
