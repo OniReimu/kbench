@@ -114,6 +114,10 @@ print(f"Merged target saved to {output_dir}")
 
 **Hardware requirement:** CPU only. Requires approximately 32 GB of system RAM to hold the model in fp32 during merging, plus Hugging Face access to the gated repository `meta-llama/Llama-3.1-8B-Instruct`.
 
+On a cluster that moves caches off `$HOME`, export `HF_TOKEN` alongside the redirected
+`HF_HOME`. A redirected cache holds no stored credential, so the gated download otherwise
+fails with `GatedRepoError: 401 Client Error`.
+
 ---
 
 ## Step 3: Produce an Edited Checkpoint with Your Method
@@ -151,6 +155,10 @@ files it was built from:
 From those two files a locate-and-edit method can assemble its own input: the subject is
 `name`, the relation is `field`, the value to remove is the attribute or `ground_truth`, and
 the prompt is `query`. The four id lists in the same directory give the splits.
+
+K-Bench does not fix the prompt templates for that mapping, and the choice moves the score,
+so it is a free parameter of the submission rather than part of the benchmark. State the
+templates you used in your submission's `README.md`.
 
 **Hardware requirement:** GPU required; see [COMPUTE.md](COMPUTE.md) for the hardware used in the paper.
 
