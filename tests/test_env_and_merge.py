@@ -143,3 +143,63 @@ def test_merge_loads_fp32_and_saves_bf16(
     assert calls["cast"] is bfloat16
     assert calls["model_save"] == (str(out), {"safe_serialization": True})
     assert calls["tokenizer_save"] == str(out)
+
+
+def _merge_objects() -> SimpleNamespace:
+    """The stub trio _load_merge_module needs; none of it is touched by the tokenizer fix."""
+    return SimpleNamespace(
+        float32=object(),
+        bfloat16=object(),
+        auto_model=object(),
+        auto_tokenizer=object(),
+        peft_model=object(),
+    )
+
+
+def test_merge_restores_the_base_tokenizer_class(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """transformers 5.x writes TokenizersBackend, which the documented transformers-4.51
+    OpenUnlearning environment refuses. The merge must leave the base's own class name."""
+    module = _load_merge_module(monkeypatch, _merge_objects())
+    out = tmp_path / "merged"
+    out.mkdir()
+    (out / "tokenizer_config.json").write_text(
+        json.dumps({"tokenizer_class": "TokenizersBackend", "model_max_length": 131072})
+    )
+    base_cfg = tmp_path / "base_tokenizer_config.json"
+    base_cfg.write_text(json.dumps({"tokenizer_class": "PreTrainedTokenizerFast"}))
+
+    hub = ModuleType("huggingface_hub")
+    hub.hf_hub_download = lambda repo_id, filename, revision: str(base_cfg)
+    monkeypatch.setitem(sys.modules, "huggingface_hub", hub)
+
+    module._restore_base_tokenizer_class("meta-llama/Llama-3.1-8B-Instruct", "rev", out)
+
+    written = json.loads((out / "tokenizer_config.json").read_text())
+    assert written["tokenizer_class"] == "PreTrainedTokenizerFast"
+    assert written["model_max_length"] == 131072
+
+
+def test_merge_leaves_the_class_alone_when_the_base_is_unreachable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Offline or gated: keep what transformers wrote rather than guessing a class name."""
+    module = _load_merge_module(monkeypatch, _merge_objects())
+    out = tmp_path / "merged"
+    out.mkdir()
+    (out / "tokenizer_config.json").write_text(
+        json.dumps({"tokenizer_class": "TokenizersBackend"})
+    )
+
+    def boom(repo_id, filename, revision):
+        raise OSError("offline")
+
+    hub = ModuleType("huggingface_hub")
+    hub.hf_hub_download = boom
+    monkeypatch.setitem(sys.modules, "huggingface_hub", hub)
+
+    module._restore_base_tokenizer_class("meta-llama/Llama-3.1-8B-Instruct", "rev", out)
+
+    saved = json.loads((out / "tokenizer_config.json").read_text())
+    assert saved["tokenizer_class"] == "TokenizersBackend"

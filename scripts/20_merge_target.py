@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -47,7 +48,46 @@ def merge_target(base: str, revision: str, adapter: Path, out: Path) -> None:
     print(f"[save] {out}")
     merged.save_pretrained(str(out), safe_serialization=True)
     tok.save_pretrained(str(out))
+    _restore_base_tokenizer_class(base, revision, out)
     print(f"[exit] merged K-Bench target at {out}")
+
+
+def _restore_base_tokenizer_class(base: str, revision: str, out: Path) -> None:
+    """Write back the tokenizer class the base model declares.
+
+    transformers 5.x saves `tokenizer_class: "TokenizersBackend"`, a name that only 5.x
+    knows. The next documented step trains in the transformers-4.51 OpenUnlearning
+    environment (docs/OPENUNLEARNING.md), which refuses that name with
+    `ValueError: Tokenizer class TokenizersBackend does not exist`. Restoring the base's
+    own value leaves one checkpoint both environments can read; verified loading under
+    4.51.3 and 5.7.0.
+    """
+    # Imported here so the test stubs can replace it: the module-level transformers/peft
+    # imports are already stubbed, and the hub call is only needed on the save path.
+    from huggingface_hub import hf_hub_download
+
+    saved = out / "tokenizer_config.json"
+    if not saved.is_file():
+        return
+    try:
+        base_cfg_path = hf_hub_download(
+            repo_id=base, filename="tokenizer_config.json", revision=revision
+        )
+        base_class = json.loads(Path(base_cfg_path).read_text(encoding="utf-8")).get(
+            "tokenizer_class"
+        )
+    except Exception as exc:  # offline or gated: leave the file as transformers wrote it
+        print(f"[save] could not read the base tokenizer class ({exc}); leaving it as written")
+        return
+    if not base_class:
+        return
+    cfg = json.loads(saved.read_text(encoding="utf-8"))
+    if cfg.get("tokenizer_class") == base_class:
+        return
+    written = cfg.get("tokenizer_class")
+    cfg["tokenizer_class"] = base_class
+    saved.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
+    print(f"[save] tokenizer_class {written!r} -> {base_class!r} (readable by both environments)")
 
 
 def main(argv: Sequence[str] | None = None) -> None:

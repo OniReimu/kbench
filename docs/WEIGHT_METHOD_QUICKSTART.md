@@ -71,6 +71,8 @@ The equivalent inline Python is:
 
 ```python
 import torch
+from pathlib import Path
+
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -89,8 +91,26 @@ print("Merging weights and casting to bfloat16...")
 model = model.merge_and_unload().to(torch.bfloat16)
 model.save_pretrained(output_dir, safe_serialization=True)
 AutoTokenizer.from_pretrained(base_id, revision=revision).save_pretrained(output_dir)
+
+# transformers 5.x records `tokenizer_class: "TokenizersBackend"`, a name only 5.x knows.
+# Training recipes that run in the transformers-4.51 environment (see docs/OPENUNLEARNING.md)
+# refuse it with `ValueError: Tokenizer class TokenizersBackend does not exist`, so write the
+# base model's own class back and keep one checkpoint both environments can read.
+import json
+from huggingface_hub import hf_hub_download
+
+saved = Path(output_dir) / "tokenizer_config.json"
+base_class = json.loads(
+    Path(hf_hub_download(base_id, "tokenizer_config.json", revision=revision)).read_text()
+)["tokenizer_class"]
+config = json.loads(saved.read_text())
+config["tokenizer_class"] = base_class
+saved.write_text(json.dumps(config, indent=2) + "\n")
+
 print(f"Merged target saved to {output_dir}")
 ```
+
+`scripts/20_merge_target.py` already does that last step for you.
 
 **Hardware requirement:** CPU only. Requires approximately 32 GB of system RAM to hold the model in fp32 during merging, plus Hugging Face access to the gated repository `meta-llama/Llama-3.1-8B-Instruct`.
 
