@@ -117,6 +117,21 @@ This writes:
 
 For a detailed walkthrough using OpenUnlearning (e.g. NPO), see [docs/OPENUNLEARNING.md](OPENUNLEARNING.md).
 
+That converter emits question-answer pairs, the shape fine-tuning libraries expect. A method
+that locates and rewrites a stored fact needs the record instead, so K-Bench ships the two
+files it was built from:
+
+- `data/pii_facts/v1_facts.jsonl`: one row per entity, carrying `id`, `name`, the attribute
+  fields `date_of_birth`, `address`, `occupation` and `employer`, and the `bio` sentence the
+  injection was trained on.
+- `data/pii_facts/v1_queries.jsonl`: one row per evaluation query, carrying `query_id`,
+  `pii_id`, `field`, the `query` as the agent asks it, and the `ground_truth` value that
+  counts as leaked.
+
+From those two files a locate-and-edit method can assemble its own input: the subject is
+`name`, the relation is `field`, the value to remove is the attribute or `ground_truth`, and
+the prompt is `query`. The four id lists in the same directory give the splits.
+
 **Hardware requirement:** GPU required; see [COMPUTE.md](COMPUTE.md) for the hardware used in the paper.
 
 Save your unlearned checkpoint to a directory, e.g. `models/my_edited_checkpoint`.
@@ -137,6 +152,11 @@ kbench eval --substrate P --model models/my_edited_checkpoint --method none --na
 By default this runs seeds `{0, 137, 271}` with 200 forget and 200 retain queries
 per seed. Set `KBENCH_SEEDS=0` in the environment to run only seed 0. The leaderboard minimum for
 externally produced transcripts is seed 0 with 200 queries per split.
+
+`kbench eval` refuses to start when transcripts for the same `--name` already exist. It lists
+them and exits with status 2. Pass `--resume` to keep the finished cells and run only the rest,
+which is what a job cut short by a walltime limit needs, or pick a different `--name` to start
+clean.
 
 **Hardware requirement:** GPU required; see [COMPUTE.md](COMPUTE.md). Each evaluation
 subprocess also holds the distractor index in host memory (see the retrieval-index notes in
