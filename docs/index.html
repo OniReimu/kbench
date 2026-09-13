@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1" name="viewport"/><title>K-Bench: A Benchmark for LLM Unlearning in Agentic Deployments</title><link href="assets/favicon.svg" rel="icon" type="image/svg+xml"/><link href="styles.css" rel="stylesheet"/><script defer="" src="data.js"></script><script defer="" src="script.js"></script> <meta content="K-Bench evaluates unlearning across memory substrates and observable channels of deployed LLM agents, alongside retain preservation and agent stability." name="description"/>
+<meta content="#f7f5ef" name="theme-color"/>
+<meta content="K-Bench: A Benchmark for LLM Unlearning in Agentic Deployments" property="og:title"/>
+<meta content="K-Bench evaluates unlearning across memory substrates and observable channels of deployed LLM agents, alongside retain preservation and agent stability." property="og:description"/>
+<meta content="website" property="og:type"/>
+<meta content="summary" name="twitter:card"/>
+<meta content="K-Bench: A Benchmark for LLM Unlearning in Agentic Deployments" name="twitter:title"/>
+<meta content="K-Bench evaluates unlearning across memory substrates and observable channels of deployed LLM agents, alongside retain preservation and agent stability." name="twitter:description"/>
+  <meta name="description" content="K-Bench evaluates unlearning across memory substrates and observable channels of deployed LLM agents, alongside retain preservation and agent stability.">
+  <meta name="theme-color" content="#f7f5ef">
+  <meta property="og:title" content="K-Bench: A Benchmark for LLM Unlearning in Agentic Deployments">
+  <meta property="og:description" content="K-Bench evaluates unlearning across memory substrates and observable channels of deployed LLM agents, alongside retain preservation and agent stability.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="K-Bench: A Benchmark for LLM Unlearning in Agentic Deployments">
+  <meta name="twitter:description" content="K-Bench evaluates unlearning across memory substrates and observable channels of deployed LLM agents, alongside retain preservation and agent stability.">
+  <meta property="og:url" content="https://onireimu.github.io/kbench/">
+  <meta property="og:image" content="https://onireimu.github.io/kbench/assets/overview.png">
+  <link rel="canonical" href="https://onireimu.github.io/kbench/">
+  <link rel="alternate" hreflang="en" href="https://onireimu.github.io/kbench/" data-generated="alternate">
+  <link rel="alternate" hreflang="zh-CN" href="https://onireimu.github.io/kbench/zh/" data-generated="alternate">
+  <link rel="alternate" hreflang="x-default" href="https://onireimu.github.io/kbench/" data-generated="alternate">
+</head>
+<body id="top"><a class="skip" href="#main">Skip to content</a>
+<header><div class="nav-wrap"><a aria-label="K-Bench home" class="brand" href="#top"><span class="brand-icon">K<span>·</span></span><span>K-Bench<small>AGENTIC UNLEARNING</small></span></a><nav aria-label="Main navigation"><a href="#framework">Framework</a><a href="#evidence">Results</a><a href="#leaderboard">Methods</a><a href="#limits">Limitations</a></nav><div class="nav-actions"><div aria-label="Language" class="language-switch" role="group"><a aria-current="page" href="./" lang="en">EN</a><a href="zh/" lang="zh-CN">中文</a></div><a class="nav-paper" href="paper.pdf" rel="noopener" target="_blank">Read paper <span>↗</span></a></div></div>
+</header>
+<main id="main">
+<section aria-labelledby="paper-title" class="hero wrap"><div class="hero-copy"><div class="eyebrow"><span class="dot"></span> LLM UNLEARNING · AGENTIC DEPLOYMENTS</div>
+<h1 id="paper-title"><span>K-Bench:</span> A Benchmark for LLM Unlearning in Agentic Deployments</h1><p class="hero-subtitle">Evaluating unlearning across the memory substrates and observable channels of deployed LLM agents.</p><p class="authors">Guangsheng Yu · Yanna Jiang · Qin Wang<br/>Baihe Ma · Xu Wang</p><p class="affiliations">University of Technology Sydney · CSIRO</p><div class="actions"><a class="button primary" href="#evidence">View results <span>↓</span></a><a class="button secondary" href="paper.pdf" rel="noopener" target="_blank">Paper PDF ↗</a></div>
+<div class="source-links"><a href="https://github.com/OniReimu/kbench" rel="noopener" target="_blank">GitHub ↗</a><a href="https://huggingface.co/datasets/kbench/kbench-assets" rel="noopener" target="_blank">Dataset ↗</a></div>
+</div>
+<div class="hero-visual"><div class="visual-top"><span>CHANNEL LEAKAGE</span><span class="pill">Results</span></div>
+<h2>Channel leakage<br/>under StaR</h2><p class="visual-desc">Llama-3.1-8B · R-struct · StaR</p><div class="mini-legend"><span><i class="before"></i>No intervention</span><span><i class="after"></i>StaR</span></div>
+<div class="hero-chart"><div class="bar-label">Final answer <span>−36.9 percentage points</span></div>
+<div class="bar-track"><div class="bar before" style="width:83.2%">83.2%</div>
+</div><div class="bar-track"><div class="bar after" style="width:46.3%">46.3%</div>
+</div><div class="bar-label second">All channels · OR(all) <span>+0.2 percentage points</span></div>
+<div class="bar-track"><div class="bar before" style="width:85.5%">85.5%</div>
+</div><div class="bar-track"><div class="bar after" style="width:85.7%">85.7%</div>
+</div></div>
+<div class="visual-note"><span>↳</span> The target value remains recoverable in tool observations.</div>
+</div>
+</section>
+<div class="wrap facts"><div><strong>4</strong><span>Memory substrates<small>Weights, context, two retrieval forms</small></span></div>
+<div><strong>6</strong><span>Observable channels<small>Across the agent execution trace</small></span></div>
+<div><strong>3</strong><span>Base models<small>Evaluated in valid configurations</small></span></div>
+<div><strong>20</strong><span>Published methods<small>Compared on the parametric target</small></span></div>
+</div>
+<section class="wrap section question" id="question"><div class="section-heading"><div class="eyebrow">01 / MOTIVATION</div>
+<h2>Unlearning across<br/>observable channels</h2></div>
+<div class="question-copy"><p class="large-copy">Deployed agents produce reasoning traces, call tools, and retrieve records in addition to generating final answers. Each observable channel can expose a target value.</p><p>K-Bench evaluates the full observable ReAct trace. A query counts as leaked when any channel reveals the target value. Unlearning is assessed jointly with retain-set behavior and agent stability.</p><div class="principles"><div><b>01</b><span>Channel coverage<small>Detect leakage across channels</small></span></div>
+<div><b>02</b><span>Separate evaluation<small>Score each substrate separately</small></span></div>
+<div><b>03</b><span>Agent usability<small>Account for retain damage and collapse</small></span></div>
+</div></div>
+</section>
+<section class="soft-section" id="framework"><div class="wrap section"><div class="section-heading row-heading"><div><div class="eyebrow">02 / FRAMEWORK</div>
+<h2>Memory substrates<br/>and access paths</h2></div>
+<p>Each configuration injects the target into one substrate. Eligible interventions are evaluated and scored separately on each substrate.</p></div>
+<div aria-label="Select memory substrate" class="lane-tabs" role="group"><button aria-pressed="true" data-lane="P"><b>P</b><span>Model weights<small>Parametric</small></span></button><button aria-pressed="false" data-lane="C"><b>C</b><span>Working context<small>Context</small></span></button><button aria-pressed="false" data-lane="R-text"><b>Rₜ</b><span>Text retrieval<small>R-text</small></span></button><button aria-pressed="false" data-lane="R-struct"><b>Rₛ</b><span>Structured retrieval<small>R-struct</small></span></button></div>
+<div aria-live="polite" class="flow-panel"><div class="flow-source"><div class="eyebrow">MEMORY SUBSTRATE</div>
+<h3 id="lane-title"></h3><p id="lane-copy"></p><div class="mechanism-tag" id="lane-tag"></div>
+</div><div aria-hidden="true" class="flow-arrow">→</div>
+<div class="agent-node"><div class="agent-mark">R<span>↻</span></div>
+<strong>ReAct agent</strong><span>Reason → act → observe</span></div>
+<div aria-hidden="true" class="flow-arrow">→</div>
+<div class="flow-exit"><span class="small-label">CHANNEL OF INTEREST</span><h3 id="lane-channel"></h3><p id="lane-result"></p></div>
+</div><div class="channel-strip"><span>Six observable channels</span><span>Reasoning text</span><span>Tool arguments</span><span>Arguments + observations</span><span>Retrieval results</span><span>Final answer</span><span>Elicited summary</span></div>
+<p class="fineprint">Reasoning text refers to observable ReAct “Thought” traces. The arguments-and-observations channel includes tool arguments, so the six channels are not independent.</p><details class="figure-disclosure"><summary>View the complete framework <span>＋</span></summary><figure><a href="assets/overview.png" rel="noopener" target="_blank"><img alt="K-Bench substrate routing, observable channels, and scoring framework" height="850" loading="lazy" src="assets/overview.png" width="2000"/></a><figcaption>Each substrate is scored separately. Observations are aggregated by a per-query logical OR across six channels, alongside retain preservation and agent stability.</figcaption></figure></details></div>
+</section>
+<section class="wrap section" id="evidence"><div class="section-heading row-heading"><div><div class="eyebrow">03 / RESULTS</div>
+<h2>Recovery under nested<br/>observation budgets</h2></div>
+<p>Recovery rates are measured on the no-intervention baseline as the observer gains access to additional channels, separately for each model and substrate.</p></div>
+<div class="evidence-panel"><div class="controls"><label>Base model<select id="budget-model"><option>Llama-3.1-8B</option><option>Mistral-7B</option><option>Qwen3.5-9B</option></select></label><label>Substrate<select id="budget-lane"></select></label><span class="data-tag"><span class="dot"></span> NO-INTERVENTION BASELINE</span></div>
+<div class="chart-layout"><div class="chart-main"><div class="chart-caption">Target recovery rate <span>Fraction of queries with leakage</span></div>
+<svg aria-label="Target recovery under nested observation budgets" id="budget-chart" role="img" viewbox="0 0 680 290"></svg><div aria-label="Select observation budget" class="budget-steps" role="group"><button aria-pressed="false" data-budget="0"><b>A₁</b>Answer</button><button aria-pressed="false" data-budget="1"><b>A₂</b>+ Summary</button><button aria-pressed="false" data-budget="2"><b>A₃</b>+ Reasoning</button><button aria-pressed="false" data-budget="3"><b>A₄</b>+ Tools</button><button aria-pressed="true" data-budget="4"><b>A₅</b>All channels</button></div>
+</div><div aria-live="polite" class="chart-readout"><span id="budget-name"></span><div class="big-rate" id="budget-rate"></div>
+<p id="budget-delta"></p><hr/><h3 id="budget-insight-title"></h3><p id="budget-insight"></p><small id="budget-flips"></small></div>
+</div><p class="fineprint" id="budget-scope"></p><details class="data-details"><summary>View values for this configuration</summary><div class="table-scroll"><table><caption id="budget-table-caption"></caption><thead><tr><th scope="col">Observation budget</th><th scope="col">Observed channels</th><th scope="col">Recovery rate</th></tr></thead><tbody id="budget-table"></tbody></table></div>
+</details></div>
+<details class="figure-disclosure"><summary>View results across all models <span>＋</span></summary><figure><a href="assets/attacker-budget.png" rel="noopener" target="_blank"><img alt="Recovery rates across base models and memory substrates" loading="lazy" src="assets/attacker-budget.png"/></a><figcaption>No-intervention recovery rates across observation budgets for all measurable model–substrate configurations.</figcaption></figure></details><div class="takeaway"><span>Interpretation</span><p>The additional recovery depends on the substrate. Elicited summaries account for the main increase on the parametric target, while tool channels account for the main increase on text retrieval.</p></div>
+</section>
+<section class="score-section" id="scoring"><div class="wrap section"><div class="section-heading row-heading"><div><div class="eyebrow">04 / SCORING</div>
+<h2>Collapse-aware scoring</h2></div>
+<p>K-Score combines forget-set leakage, retain-set change, and added degeneration. Adjust the example inputs to inspect their multiplicative effect.</p></div>
+<div class="score-formula"><span>1 − graded leakage</span><b>×</b><span>Retain preservation</span><b>×</b><span>Agent stability</span><b>=</b><strong>K-Score</strong></div>
+<div class="score-demo"><div><div aria-label="Select an illustrative scenario" class="presets" role="group"><button aria-pressed="true" data-preset="selective">Selective suppression</button><button aria-pressed="false" data-preset="retain">Retain damage</button><button aria-pressed="false" data-preset="collapse">Added degeneration</button></div>
+<div class="sliders"><label for="forget">Graded forget-set leakage <output for="forget" id="forget-out">10%</output></label><input id="forget" max="100" min="0" type="range" value="10"/><label for="retain">Absolute retain-set change |Δsel| <output for="retain" id="retain-out">0%</output></label><input id="retain" max="100" min="0" type="range" value="0"/><label for="degen">Added degeneration Δdegen <output for="degen" id="degen-out">0%</output></label><input id="degen" max="100" min="0" type="range" value="0"/></div>
+</div><div aria-live="polite" class="score-total"><span>ILLUSTRATIVE CALCULATION</span><output id="score-value">0.900</output><div id="score-arithmetic">0.90 × 1.00 × 1.00</div>
+<p>Higher scores indicate better selective forgetting under the evaluated observer. They do not establish that the information has been removed from the weights.</p></div>
+</div><div class="score-note">K-Score uses graded token-recall severity; OR(all) uses binary leakage detection. Scores are interpreted within a base model and reported separately for each substrate.</div>
+</div>
+</section>
+<section class="wrap section" id="leaderboard"><div class="section-heading row-heading"><div><div class="eyebrow">05 / METHOD COMPARISON</div>
+<h2>Eligibility-gated<br/>method comparison</h2></div>
+<p>Methods first pass retain-preservation and stability requirements. Eligible methods are then ranked by leakage suppression.</p></div>
+<div aria-label="Select base model for method comparison" class="leader-tabs" role="group"><button aria-pressed="true" data-model="Llama-3.1-8B">Llama-3.1-8B</button><button aria-pressed="false" data-model="Mistral-7B">Mistral-7B</button><button aria-pressed="false" data-model="Qwen3.5-9B">Qwen3.5-9B</button></div>
+<div class="leader-panel"><div class="gate-summary"><div><span class="eyebrow">ELIGIBILITY GATE</span><h3><strong id="eligible-count">1</strong> / 20 <span>methods pass the primary gate</span></h3><div aria-hidden="true" class="gate-dots" id="gate-dots"></div>
+<p id="leader-insight"></p></div>
+<div class="gate-rules"><span>Retain preservation <b>≥ 80% of baseline</b></span><span>Added degeneration <b>≤ 20 percentage points</b></span><span>Agent status <b>No terminal collapse</b></span></div>
+</div><div class="table-scroll"><table class="leader-table"><caption id="leader-caption"></caption><thead><tr><th scope="col">Method</th><th scope="col">Suppression ↑</th><th scope="col">Retain ↑</th><th scope="col">Added degen. ↓</th></tr></thead><tbody id="leader-table"></tbody></table></div>
+<p class="fineprint">Parametric substrate P, weight-merged target, seed 0; 200 forget and 200 retain queries per configuration. Retain preservation measures correct-value recovery relative to the no-intervention baseline and can exceed 100%. The ranking uses the suppression factor, not K-Score or a relative reduction from baseline.</p></div>
+<div class="takeaway"><span>Across models</span><p>ELM, RMU, and LoKU rank first among eligible methods on the three base models, respectively. ELM is the only method that passes the primary gate on all three.</p></div>
+</section>
+<section class="soft-section" id="limits"><div class="wrap section limits-layout"><div class="section-heading"><div class="eyebrow">06 / LIMITATIONS</div>
+<h2>Scope and limitations</h2><p>The results apply to the evaluated deployments, observer, and data. The following factors limit their generalization.</p></div>
+<div class="limits-list"><details open=""><summary>Observer capability<span>01</span></summary><p>The observer uses fixed queries and reads six exposed channels without access to weights or activations. Adaptive follow-up queries and reconstruction from fragments across channels are outside the evaluation.</p></details><details><summary>Agent degeneration and scoring<span>02</span></summary><p>Execution failures can reduce observed leakage. K-Score penalizes degeneration added over baseline, but terminal collapse need not produce a zero score when the baseline already degenerates. The leaderboard therefore applies a separate validity requirement.</p></details><details><summary>Cross-entity leakage<span>03</span></summary><p>Detection is keyed to the queried entity. On retrieval substrates, ECO can return another entity’s record after corrupting the input. Such disclosures are not fully captured by the per-query detector.</p></details><details><summary>Data and substrate coverage<span>04</span></summary><p>The main corpus contains 5,000 synthetic entities; real-format PII validation covers dates of birth only. Experiments use single substrates and LoRA-injected parametric targets, without testing native pretraining memorization, mixed substrates, or multilingual deployments.</p></details><details><summary>Model and method configurations<span>05</span></summary><p>The model–substrate design is not fully factorial: Mistral’s context baseline falls below the measurability gate. Weight-based methods use a shared target and matched budgets, so absolute results do not reproduce each method’s published operating point.</p></details></div>
+</div></section>
+<section class="wrap section paper-section" id="paper"><div><div class="eyebrow">READ THE PAPER</div><h2>Paper and resources</h2><p>Complete methodology, experimental results, and discussion.</p></div><div class="paper-actions"><a class="button primary" href="paper.pdf" rel="noopener" target="_blank">Read paper PDF ↗</a><a class="button secondary" href="https://github.com/OniReimu/kbench" rel="noopener" target="_blank">Code ↗</a><a class="button secondary" href="https://huggingface.co/datasets/kbench/kbench-assets" rel="noopener" target="_blank">Dataset ↗</a></div></section>
+</main><footer class="wrap"><a class="brand-footer" href="#top">K-Bench</a><span>Unlearning in agentic deployments</span><a href="#top">Back to top ↑</a></footer><noscript><div class="noscript">Enable JavaScript to use the interactive figures.</div>
+</noscript></body></html>

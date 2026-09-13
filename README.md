@@ -5,6 +5,9 @@ from a deployed tool-using language-model agent. It observes six channels across
 parametric (P), context (C), and retrieval (R-text and R-struct) substrates and
 reports leakage together with retain-set damage and agent degeneration.
 
+A bilingual project website (English and Chinese) is included in `docs/`.
+See the [website guide](docs/WEBSITE.md) for local preview and GitHub Pages setup.
+
 The public workflow is:
 
 ```bash
