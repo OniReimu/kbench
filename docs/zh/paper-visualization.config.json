@@ -1,0 +1,73 @@
+{
+  "site": {
+    "title": "K-Bench: A Benchmark for LLM Unlearning in Agentic Deployments",
+    "short_title": "K-Bench",
+    "lang": "zh-CN",
+    "subtitle": "面向大语言模型智能体部署的遗忘评估，覆盖多种信息存储位置和可观察通道。",
+    "meta_description": "K-Bench 评估大语言模型智能体在不同信息存储位置和可观察通道上的遗忘效果，并结合保留能力与运行稳定性进行评分。",
+    "theme_color": "#f7f5ef",
+    "brand_home_url": "#top",
+    "language_switch": {
+      "links": [
+        {
+          "label": "EN",
+          "href": "../",
+          "active": false
+        },
+        {
+          "label": "中文",
+          "href": "./",
+          "active": true
+        }
+      ]
+    },
+    "canonical_url": "https://onireimu.github.io/kbench/zh/",
+    "og_url": "https://onireimu.github.io/kbench/zh/",
+    "og_image": "https://onireimu.github.io/kbench/assets/overview.png",
+    "alternates": [
+      {
+        "hreflang": "en",
+        "href": "https://onireimu.github.io/kbench/"
+      },
+      {
+        "hreflang": "zh-CN",
+        "href": "https://onireimu.github.io/kbench/zh/"
+      },
+      {
+        "hreflang": "x-default",
+        "href": "https://onireimu.github.io/kbench/"
+      }
+    ]
+  },
+  "authors": [
+    "Guangsheng Yu",
+    "Yanna Jiang",
+    "Qin Wang",
+    "Baihe Ma",
+    "Xu Wang"
+  ],
+  "affiliations": "University of Technology Sydney · CSIRO",
+  "sections": [
+    {
+      "id": "question"
+    },
+    {
+      "id": "framework"
+    },
+    {
+      "id": "evidence"
+    },
+    {
+      "id": "scoring"
+    },
+    {
+      "id": "leaderboard"
+    },
+    {
+      "id": "limits"
+    },
+    {
+      "id": "paper"
+    }
+  ]
+}

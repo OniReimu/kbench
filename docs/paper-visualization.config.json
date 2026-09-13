@@ -1,0 +1,73 @@
+{
+  "site": {
+    "title": "K-Bench: A Benchmark for LLM Unlearning in Agentic Deployments",
+    "short_title": "K-Bench",
+    "lang": "en",
+    "subtitle": "Evaluating unlearning across the memory substrates and observable channels of deployed LLM agents.",
+    "meta_description": "K-Bench evaluates unlearning across memory substrates and observable channels of deployed LLM agents, alongside retain preservation and agent stability.",
+    "theme_color": "#f7f5ef",
+    "brand_home_url": "#top",
+    "language_switch": {
+      "links": [
+        {
+          "label": "EN",
+          "href": "./",
+          "active": true
+        },
+        {
+          "label": "中文",
+          "href": "zh/",
+          "active": false
+        }
+      ]
+    },
+    "canonical_url": "https://onireimu.github.io/kbench/",
+    "og_url": "https://onireimu.github.io/kbench/",
+    "og_image": "https://onireimu.github.io/kbench/assets/overview.png",
+    "alternates": [
+      {
+        "hreflang": "en",
+        "href": "https://onireimu.github.io/kbench/"
+      },
+      {
+        "hreflang": "zh-CN",
+        "href": "https://onireimu.github.io/kbench/zh/"
+      },
+      {
+        "hreflang": "x-default",
+        "href": "https://onireimu.github.io/kbench/"
+      }
+    ]
+  },
+  "authors": [
+    "Guangsheng Yu",
+    "Yanna Jiang",
+    "Qin Wang",
+    "Baihe Ma",
+    "Xu Wang"
+  ],
+  "affiliations": "University of Technology Sydney · CSIRO",
+  "sections": [
+    {
+      "id": "question"
+    },
+    {
+      "id": "framework"
+    },
+    {
+      "id": "evidence"
+    },
+    {
+      "id": "scoring"
+    },
+    {
+      "id": "leaderboard"
+    },
+    {
+      "id": "limits"
+    },
+    {
+      "id": "paper"
+    }
+  ]
+}
