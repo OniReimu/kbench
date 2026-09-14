@@ -1,5 +1,7 @@
 # K-Bench
 
+[**Paper**](https://arxiv.org/abs/2609.12808) · [**Project site**](https://saberyu.pro/kbench/) · [**Assets**](https://huggingface.co/datasets/kbench/kbench-assets)
+
 K-Bench measures whether information meant to be forgotten can still be recovered
 from a deployed tool-using language-model agent. It observes six channels across
 parametric (P), context (C), and retrieval (R-text and R-struct) substrates and
