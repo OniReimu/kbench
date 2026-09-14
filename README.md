@@ -1,6 +1,6 @@
 # K-Bench
 
-[**Paper**](https://arxiv.org/abs/2609.12808) · [**Project site**](https://saberyu.pro/kbench/) · [**Assets**](https://huggingface.co/datasets/kbench/kbench-assets)
+[**Paper**](https://arxiv.org/abs/2609.12808) · [**Leaderboard**](https://huggingface.co/spaces/kbench/K-Bench-Leaderboard) · [**Project site**](https://saberyu.pro/kbench/) · [**Assets**](https://huggingface.co/datasets/kbench/kbench-assets)
 
 K-Bench measures whether information meant to be forgotten can still be recovered
 from a deployed tool-using language-model agent. It observes six channels across
