@@ -209,7 +209,7 @@ def test_report_rejects_retired_bundle_and_names_frozen_branch(tmp_path: Path) -
     manifest["scorer_version"] = "v1"
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
-    with pytest.raises(kbench.BundleValidationError, match="aaai2027"):
+    with pytest.raises(kbench.BundleValidationError, match="submission branch"):
         kbench.load_bundle(bundle)
 
 

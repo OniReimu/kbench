@@ -324,11 +324,12 @@ reproduce.sh            smoke and paper-table reproduction entry point
 ## Citation
 
 ```bibtex
-@inproceedings{kbench,
-  title  = {K-Bench: A Benchmark for LLM Unlearning in Agentic Deployments},
-  author = {Anonymous},
-  year   = {2026},
-  note   = {Under review}
+@article{kbench,
+  title   = {K-Bench: A Benchmark for LLM Unlearning in Agentic Deployments},
+  author  = {Yu, Guangsheng and Jiang, Yanna and Wang, Qin and Ma, Baihe and Wang, Xu},
+  journal = {arXiv preprint arXiv:2609.12808},
+  year    = {2026},
+  url     = {https://arxiv.org/abs/2609.12808}
 }
 ```
 

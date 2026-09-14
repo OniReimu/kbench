@@ -381,7 +381,7 @@ def load_bundle(bundle_dir: Path) -> tuple[dict, dict[str, list[dict]]]:
             raise BundleValidationError(f"bundle.json missing required field '{field}'")
     if manifest["scorer_version"] != "v2":
         raise BundleValidationError(
-            "bundle.json scorer_version must be 'v2'; use the aaai2027 branch "
+            "bundle.json scorer_version must be 'v2'; use the submission branch "
             "to reproduce or inspect v1 bundles"
         )
     if not isinstance(manifest["cells"], list) or not manifest["cells"]:
